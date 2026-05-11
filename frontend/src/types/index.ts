@@ -2,10 +2,10 @@ export interface Task {
   id: string
   title: string
   description: string
-  category: string
+  category?: string
   categoryId: string | null
   versionId: string | null
-  versionName: string | null
+  versionName?: string | null
   priority: 'high' | 'medium' | 'low'
   dueDate: string | null
   reminderTime: string | null
@@ -14,7 +14,19 @@ export interface Task {
   completedPomodoros: number
   totalPomodoros: number
   createdAt: string
+  updatedAt: string
   isCompleted: boolean
+  subTasks?: SubTask[]
+}
+
+export interface SubTask {
+  id: string
+  taskId: string
+  title: string
+  description: string
+  isCompleted: boolean
+  createdAt: string
+  updatedAt: string
 }
 
 export interface Version {

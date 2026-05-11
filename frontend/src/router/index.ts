@@ -6,6 +6,7 @@ import Tasks from '@/views/Tasks.vue'
 import Versions from '@/views/Versions.vue'
 import Stats from '@/views/Stats.vue'
 import Settings from '@/views/Settings.vue'
+import Reminders from '@/views/Reminders.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -44,11 +45,17 @@ const router = createRouter({
       name: 'Settings',
       component: Settings,
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/reminders',
+      name: 'Reminders',
+      component: Reminders,
+      meta: { requiresAuth: true }
     }
   ]
 })
 
-router.beforeEach(async (to, from) => {
+router.beforeEach(async (to) => {
   const authStore = useAuthStore()
   
   if (authStore.token && !authStore.user) {

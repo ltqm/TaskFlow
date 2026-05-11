@@ -2,7 +2,6 @@
 import { ref, onMounted } from 'vue'
 import { useVersionsStore } from '@/stores/versions'
 import { useTasksStore } from '@/stores/tasks'
-import TaskCard from '@/components/TaskCard.vue'
 import { Plus, Search, X, Calendar, FileText, Trash2, Edit3, ChevronRight } from 'lucide-vue-next'
 import type { Version, Task } from '@/types'
 

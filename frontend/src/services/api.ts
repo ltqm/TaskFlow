@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { Task, Category, User, Version } from '@/types'
+import type { Task, Category, User, Version, SubTask } from '@/types'
 
 const API_BASE_URL = 'http://localhost:3000/api'
 
@@ -55,7 +55,7 @@ export async function getTaskById(id: string): Promise<Task> {
   return response.data
 }
 
-export async function createTask(task: Omit<Task, 'id' | 'createdAt' | 'completedPomodoros' | 'isCompleted' | 'category' | 'versionName'>): Promise<Task> {
+export async function createTask(task: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'completedPomodoros' | 'isCompleted' | 'category' | 'versionName'>): Promise<Task> {
   const response = await api.post('/tasks', task)
   return response.data
 }
@@ -115,6 +115,25 @@ export async function updateVersion(id: string, name: string, description: strin
 
 export async function deleteVersion(id: string): Promise<void> {
   await api.delete(`/versions/${id}`)
+}
+
+export async function getSubTasks(taskId: string): Promise<SubTask[]> {
+  const response = await api.get(`/subtasks/${taskId}`)
+  return response.data
+}
+
+export async function createSubTask(taskId: string, title: string, description?: string): Promise<SubTask> {
+  const response = await api.post('/subtasks', { taskId, title, description })
+  return response.data
+}
+
+export async function updateSubTask(id: string, updates: Partial<SubTask>): Promise<SubTask> {
+  const response = await api.put(`/subtasks/${id}`, updates)
+  return response.data
+}
+
+export async function deleteSubTask(id: string): Promise<void> {
+  await api.delete(`/subtasks/${id}`)
 }
 
 export default api

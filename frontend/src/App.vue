@@ -3,7 +3,6 @@ import { onMounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useTasksStore } from '@/stores/tasks'
 import Navigation from '@/components/Navigation.vue'
-import router from './router'
 
 const authStore = useAuthStore()
 const tasksStore = useTasksStore()

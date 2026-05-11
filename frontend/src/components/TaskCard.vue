@@ -106,9 +106,9 @@ function getTruncatedNotes(notes: string, maxLength: number = 50) {
         </div>
 
         <div class="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
-          <span v-if="task.categoryName" class="flex items-center gap-1">
+          <span v-if="task.category" class="flex items-center gap-1">
             <Tag class="w-3 h-3" />
-            {{ task.categoryName }}
+            {{ task.category }}
           </span>
           <span v-if="task.versionName" class="flex items-center gap-1">
             <Tag class="w-3 h-3 text-purple-400" />

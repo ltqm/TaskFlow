@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useRemindersStore } from '@/stores/reminders'
 import { Home, ListChecks, GitBranch, BarChart2, Settings, LogOut, Bell } from 'lucide-vue-next'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const remindersStore = useRemindersStore()
 
 const navItems = [
   { name: '首页', icon: Home, path: '/' },
@@ -45,11 +47,20 @@ function logout() {
     </div>
 
     <div class="absolute bottom-0 left-0 right-0 p-6 border-t border-gray-700">
-      <div class="flex items-center gap-3 px-4 py-3 mb-4 rounded-lg hover:bg-gray-700 cursor-pointer">
-        <Bell class="w-5 h-5 text-gray-400" />
-        <span class="text-gray-300">提醒</span>
-        <span class="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">3</span>
-      </div>
+      <router-link
+        to="/reminders"
+        class="flex items-center gap-3 px-4 py-3 mb-4 rounded-lg hover:bg-gray-700 cursor-pointer transition-all"
+        :class="router.currentRoute.value.path === '/reminders' ? 'bg-blue-600 text-white' : 'text-gray-300'"
+      >
+        <Bell class="w-5 h-5" :class="router.currentRoute.value.path === '/reminders' ? 'text-white' : 'text-gray-400'" />
+        <span>提醒</span>
+        <span 
+          v-if="remindersStore.unreadCount > 0"
+          class="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full"
+        >
+          {{ remindersStore.unreadCount }}
+        </span>
+      </router-link>
       
       <button
         @click="logout"

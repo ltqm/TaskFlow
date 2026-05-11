@@ -25,6 +25,16 @@ export interface Version {
   createdAt: string
 }
 
+export interface SubTask {
+  id: string
+  taskId: string
+  title: string
+  description: string
+  isCompleted: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Task {
   id: string
   title: string
@@ -48,13 +58,15 @@ interface Database {
   categories: Category[]
   versions: Version[]
   tasks: Task[]
+  subTasks: SubTask[]
 }
 
 let db: Database = {
   users: [],
   categories: [],
   versions: [],
-  tasks: []
+  tasks: [],
+  subTasks: []
 }
 
 const DATA_DIR = './data'
@@ -68,9 +80,11 @@ export function initDatabase() {
   if (fs.existsSync(DATA_FILE)) {
     try {
       const data = fs.readFileSync(DATA_FILE, 'utf-8')
-      db = JSON.parse(data)
+      const parsed = JSON.parse(data)
+      db = { ...db, ...parsed }
+      if (!db.subTasks) db.subTasks = []
     } catch {
-      db = { users: [], categories: [], versions: [], tasks: [] }
+      db = { users: [], categories: [], versions: [], tasks: [], subTasks: [] }
     }
   }
 
@@ -200,6 +214,16 @@ export function getTaskById(id: string, userId: string): Task | undefined {
 export function updateTask(id: string, userId: string, updates: Partial<Task>): Task | undefined {
   const index = db.tasks.findIndex(t => t.id === id && t.userId === userId)
   if (index === -1) return undefined
+  
+  if (updates.isCompleted !== undefined) {
+    if (updates.isCompleted) {
+      const subTasks = getSubTasksByTaskId(id)
+      subTasks.forEach(st => {
+        updateSubTask(st.id, { isCompleted: true })
+      })
+    }
+  }
+  
   db.tasks[index] = { ...db.tasks[index], ...updates }
   saveDatabase()
   return db.tasks[index]
@@ -209,6 +233,69 @@ export function deleteTask(id: string, userId: string): boolean {
   const index = db.tasks.findIndex(t => t.id === id && t.userId === userId)
   if (index === -1) return false
   db.tasks.splice(index, 1)
+  db.subTasks = db.subTasks.filter(st => st.taskId !== id)
+  saveDatabase()
+  return true
+}
+
+export function createSubTask(subTask: Omit<SubTask, 'id' | 'createdAt' | 'updatedAt'>): SubTask {
+  const now = new Date().toISOString()
+  const newSubTask: SubTask = { 
+    ...subTask, 
+    id: Date.now().toString(),
+    createdAt: now,
+    updatedAt: now
+  }
+  db.subTasks.push(newSubTask)
+  saveDatabase()
+  return newSubTask
+}
+
+export function getSubTasksByTaskId(taskId: string): SubTask[] {
+  return db.subTasks.filter(st => st.taskId === taskId).sort((a, b) => 
+    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  )
+}
+
+export function getSubTaskById(id: string): SubTask | undefined {
+  return db.subTasks.find(st => st.id === id)
+}
+
+export function updateSubTask(id: string, updates: Partial<SubTask>): SubTask | undefined {
+  const index = db.subTasks.findIndex(st => st.id === id)
+  if (index === -1) return undefined
+  
+  const subTask = db.subTasks[index]
+  const taskId = subTask.taskId
+  
+  db.subTasks[index] = { 
+    ...db.subTasks[index], 
+    ...updates,
+    updatedAt: new Date().toISOString()
+  }
+  
+  if (updates.isCompleted !== undefined) {
+    const task = getTaskById(taskId, db.tasks.find(t => t.id === taskId)?.userId || '')
+    if (task) {
+      const subTasks = getSubTasksByTaskId(taskId)
+      const allCompleted = subTasks.every(st => st.isCompleted)
+      if (allCompleted && !task.isCompleted) {
+        const taskIndex = db.tasks.findIndex(t => t.id === taskId)
+        if (taskIndex !== -1) {
+          db.tasks[taskIndex] = { ...db.tasks[taskIndex], isCompleted: true }
+        }
+      }
+    }
+  }
+  
+  saveDatabase()
+  return db.subTasks[index]
+}
+
+export function deleteSubTask(id: string): boolean {
+  const index = db.subTasks.findIndex(st => st.id === id)
+  if (index === -1) return false
+  db.subTasks.splice(index, 1)
   saveDatabase()
   return true
 }

@@ -3,6 +3,7 @@ import { getAllTasks, getTaskByIdHandler, createTaskHandler, updateTaskHandler, 
 import { getAllCategories, getCategoryByIdHandler, createCategoryHandler, updateCategoryHandler, deleteCategoryHandler } from '../controllers/categories'
 import { getAllVersions, getVersionByIdHandler, createVersionHandler, updateVersionHandler, deleteVersionHandler, getTasksByVersion } from '../controllers/versions'
 import { register, login, getUser } from '../controllers/auth'
+import { createSubTaskHandler, getSubTasksHandler, getSubTaskHandler, updateSubTaskHandler, deleteSubTaskHandler } from '../controllers/subtasks'
 import { authenticateToken } from '../middleware/auth'
 
 const router = Router()
@@ -29,5 +30,11 @@ router.get('/versions/:id/tasks', authenticateToken, getTasksByVersion)
 router.post('/versions', authenticateToken, createVersionHandler)
 router.put('/versions/:id', authenticateToken, updateVersionHandler)
 router.delete('/versions/:id', authenticateToken, deleteVersionHandler)
+
+router.get('/subtasks/:taskId', authenticateToken, getSubTasksHandler)
+router.get('/subtask/:id', authenticateToken, getSubTaskHandler)
+router.post('/subtasks', authenticateToken, createSubTaskHandler)
+router.put('/subtasks/:id', authenticateToken, updateSubTaskHandler)
+router.delete('/subtasks/:id', authenticateToken, deleteSubTaskHandler)
 
 export default router

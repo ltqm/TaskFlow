@@ -1,7 +1,18 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Task, Category } from '@/types'
-import { getTasks, createTask, updateTask, deleteTask, getCategories, createCategory } from '@/services/api'
+import type { Task, Category, SubTask } from '@/types'
+import { 
+  getTasks, 
+  createTask, 
+  updateTask, 
+  deleteTask, 
+  getCategories, 
+  createCategory,
+  getSubTasks as fetchSubTasksApi,
+  createSubTask as createSubTaskApi,
+  updateSubTask as updateSubTaskApi,
+  deleteSubTask as deleteSubTaskApi
+} from '@/services/api'
 
 export const useTasksStore = defineStore('tasks', () => {
   const tasks = ref<Task[]>([])
@@ -31,7 +42,16 @@ export const useTasksStore = defineStore('tasks', () => {
     }
   }
 
-  async function addTask(task: Omit<Task, 'id' | 'createdAt' | 'completedPomodoros' | 'isCompleted'>) {
+  async function fetchSubTasks(taskId: string): Promise<SubTask[]> {
+    try {
+      return await fetchSubTasksApi(taskId)
+    } catch (error) {
+      console.error('Failed to fetch sub tasks:', error)
+      throw error
+    }
+  }
+
+  async function addTask(task: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'completedPomodoros' | 'isCompleted'>) {
     try {
       const newTask = await createTask(task)
       tasks.value.unshift(newTask)
@@ -60,6 +80,33 @@ export const useTasksStore = defineStore('tasks', () => {
       tasks.value = tasks.value.filter(t => t.id !== id)
     } catch (error) {
       console.error('Failed to delete task:', error)
+      throw error
+    }
+  }
+
+  async function addSubTask(taskId: string, title: string, description?: string) {
+    try {
+      await createSubTaskApi(taskId, title, description)
+    } catch (error) {
+      console.error('Failed to create sub task:', error)
+      throw error
+    }
+  }
+
+  async function updateSubTask(id: string, updates: Partial<SubTask>) {
+    try {
+      await updateSubTaskApi(id, updates)
+    } catch (error) {
+      console.error('Failed to update sub task:', error)
+      throw error
+    }
+  }
+
+  async function deleteSubTask(id: string) {
+    try {
+      await deleteSubTaskApi(id)
+    } catch (error) {
+      console.error('Failed to delete sub task:', error)
       throw error
     }
   }
@@ -104,9 +151,13 @@ export const useTasksStore = defineStore('tasks', () => {
     highPriorityTasks,
     fetchTasks,
     fetchCategories,
+    fetchSubTasks,
     addTask,
     updateTaskById,
     deleteTaskById,
+    addSubTask,
+    updateSubTask,
+    deleteSubTask,
     addCategory,
     filterByCategory,
     filterByPriority,

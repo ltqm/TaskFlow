@@ -32,7 +32,7 @@ const tasksByCategory = computed(() => {
   })
   
   tasksStore.tasks.forEach(task => {
-    const categoryName = task.categoryName || '未分类'
+    const categoryName = task.category || '未分类'
     if (!result[categoryName]) {
       result[categoryName] = { total: 0, completed: 0 }
     }
