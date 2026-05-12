@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import { getTasksByUserId, getTaskById, createTask, updateTask, deleteTask as dbDeleteTask, getCategoriesByUserId, getVersionsByUserId } from '../database'
+import { fail, ok } from '../utils/response'
 
 export function getAllTasks(req: Request, res: Response) {
   try {
@@ -19,9 +20,9 @@ export function getAllTasks(req: Request, res: Response) {
       }
     })
 
-    res.json(formattedTasks)
+    return ok(res, formattedTasks)
   } catch (error) {
-    res.status(500).json({ error: '获取任务列表失败' })
+    return fail(res, 500, 20099, '获取任务列表失败')
   }
 }
 
@@ -32,7 +33,7 @@ export function getTaskByIdHandler(req: Request, res: Response) {
 
     const task = getTaskById(id, userId)
     if (!task) {
-      return res.status(404).json({ error: '任务不存在' })
+      return fail(res, 404, 20001, '任务不存在')
     }
 
     const categories = getCategoriesByUserId(userId)
@@ -40,14 +41,14 @@ export function getTaskByIdHandler(req: Request, res: Response) {
     const category = categories.find(c => c.id === task.categoryId)
     const version = versions.find(v => v.id === task.versionId)
 
-    res.json({
+    return ok(res, {
       ...task,
       categoryName: category?.name || null,
       categoryColor: category?.color || null,
       versionName: version?.name || null
     })
   } catch (error) {
-    res.status(500).json({ error: '获取任务失败' })
+    return fail(res, 500, 20098, '获取任务失败')
   }
 }
 
@@ -68,7 +69,7 @@ export function createTaskHandler(req: Request, res: Response) {
     } = req.body
 
     if (!title) {
-      return res.status(400).json({ error: '任务标题不能为空' })
+      return fail(res, 400, 20011, '任务标题不能为空')
     }
 
     const task = createTask({
@@ -93,14 +94,18 @@ export function createTaskHandler(req: Request, res: Response) {
     const category = categories.find(c => c.id === task.categoryId)
     const version = versions.find(v => v.id === task.versionId)
 
-    res.status(201).json({
+    return res.status(201).json({
+      code: 0,
+      data: {
       ...task,
       categoryName: category?.name || null,
       categoryColor: category?.color || null,
       versionName: version?.name || null
+      },
+      msg: ''
     })
   } catch (error) {
-    res.status(500).json({ error: '创建任务失败' })
+    return fail(res, 500, 20097, '创建任务失败')
   }
 }
 
@@ -112,12 +117,12 @@ export function updateTaskHandler(req: Request, res: Response) {
 
     const existingTask = getTaskById(id, userId)
     if (!existingTask) {
-      return res.status(404).json({ error: '任务不存在' })
+      return fail(res, 404, 20001, '任务不存在')
     }
 
     const task = updateTask(id, userId, updates)
     if (!task) {
-      return res.status(404).json({ error: '任务不存在' })
+      return fail(res, 404, 20001, '任务不存在')
     }
 
     const categories = getCategoriesByUserId(userId)
@@ -125,14 +130,14 @@ export function updateTaskHandler(req: Request, res: Response) {
     const category = categories.find(c => c.id === task.categoryId)
     const version = versions.find(v => v.id === task.versionId)
 
-    res.json({
+    return ok(res, {
       ...task,
       categoryName: category?.name || null,
       categoryColor: category?.color || null,
       versionName: version?.name || null
     })
   } catch (error) {
-    res.status(500).json({ error: '更新任务失败' })
+    return fail(res, 500, 20096, '更新任务失败')
   }
 }
 
@@ -143,11 +148,11 @@ export function deleteTaskHandler(req: Request, res: Response) {
 
     const success = dbDeleteTask(id, userId)
     if (!success) {
-      return res.status(404).json({ error: '任务不存在' })
+      return fail(res, 404, 20001, '任务不存在')
     }
 
-    res.json({ message: '任务已删除' })
+    return ok(res, null, '任务已删除')
   } catch (error) {
-    res.status(500).json({ error: '删除任务失败' })
+    return fail(res, 500, 20095, '删除任务失败')
   }
 }

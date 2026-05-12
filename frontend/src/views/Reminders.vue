@@ -12,6 +12,8 @@ import {
   Tag,
   Eye
 } from 'lucide-vue-next'
+import Button from '@/components/ui/button/Button.vue'
+import Badge from '@/components/ui/badge/Badge.vue'
 
 const remindersStore = useRemindersStore()
 const tasksStore = useTasksStore()
@@ -75,74 +77,77 @@ function getCategoryName(categoryId: string | null): string {
 </script>
 
 <template>
-  <div class="ml-64 p-8">
+  <div class="ml-64 min-h-screen bg-background p-8">
     <div class="flex items-center justify-between mb-8">
       <div>
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
             <Bell class="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 class="text-3xl font-bold text-white">提醒中心</h1>
-            <p class="text-gray-400 mt-1">
+            <h1 class="text-3xl font-bold tracking-tight text-foreground">提醒中心</h1>
+            <p class="mt-1 text-muted-foreground">
               {{ remindersStore.allReminders.length }} 条待处理提醒
             </p>
           </div>
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <button
+        <Button
           v-if="remindersStore.allReminders.length > 0"
           @click="remindersStore.dismissAll"
-          class="px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+          variant="outline"
         >
           全部忽略
-        </button>
-        <button
+        </Button>
+        <Button
           v-if="hasDismissedReminders"
           @click="remindersStore.restoreAll"
-          class="px-4 py-2 text-blue-400 hover:text-blue-300 hover:bg-blue-900/20 rounded-lg transition-colors"
+          variant="secondary"
         >
           恢复提醒
-        </button>
+        </Button>
       </div>
     </div>
 
-    <div class="bg-gray-800 rounded-xl p-4 mb-6 border border-gray-700">
+    <div class="mb-6 rounded-xl border border-border/80 bg-card p-4">
       <div class="flex items-center gap-4">
         <div class="flex items-center gap-2">
-          <Bell class="w-5 h-5 text-gray-400" />
-          <span class="text-gray-300">筛选:</span>
+          <Bell class="w-5 h-5 text-muted-foreground" />
+          <span class="text-foreground/90">筛选:</span>
         </div>
         <div class="flex items-center gap-2">
-          <button
+          <Button
+            variant="ghost"
             class="px-4 py-2 rounded-lg transition-colors"
-            :class="selectedFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'"
+            :class="selectedFilter === 'all' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground'"
           >
             全部
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
             class="px-4 py-2 rounded-lg transition-colors"
-            :class="selectedFilter === 'overdue' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'"
+            :class="selectedFilter === 'overdue' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground'"
           >
             已过期
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
             class="px-4 py-2 rounded-lg transition-colors"
-            :class="selectedFilter === 'upcoming' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'"
+            :class="selectedFilter === 'upcoming' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground'"
           >
             即将到期
-          </button>
+          </Button>
         </div>
       </div>
     </div>
 
-    <div v-if="remindersStore.allReminders.length === 0" class="bg-gray-800 rounded-xl p-12 border border-gray-700 text-center">
-      <div class="w-20 h-20 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+    <div v-if="remindersStore.allReminders.length === 0" class="rounded-xl border border-border/80 bg-card p-12 text-center">
+      <div class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-secondary">
         <CheckCircle class="w-10 h-10 text-green-500" />
       </div>
-      <h3 class="text-xl font-semibold text-gray-300 mb-2">暂无待处理提醒</h3>
-      <p class="text-gray-500">所有任务都已按时完成，继续保持！</p>
+      <h3 class="mb-2 text-xl font-semibold text-foreground">暂无待处理提醒</h3>
+      <p class="text-muted-foreground">所有任务都已按时完成，继续保持！</p>
     </div>
 
     <div v-else class="space-y-4">
@@ -150,15 +155,15 @@ function getCategoryName(categoryId: string | null): string {
         <div class="flex items-center gap-2 mb-3">
           <AlertTriangle class="w-5 h-5 text-red-500" />
           <h3 class="text-lg font-semibold text-red-400">已过期</h3>
-          <span class="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full">
+          <Badge variant="destructive" class="bg-red-500/20 text-red-400">
             {{ remindersStore.expiredTasks.length }}
-          </span>
+          </Badge>
         </div>
         
         <div
           v-for="task in remindersStore.expiredTasks"
           :key="task.id"
-          class="bg-gray-800 rounded-xl p-4 border border-red-900/30 hover:border-red-700/50 transition-all cursor-pointer"
+          class="cursor-pointer rounded-xl border border-red-500/25 bg-card p-4 transition-all hover:border-red-400/45"
         >
           <div class="flex items-start gap-4">
             <div class="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -167,7 +172,7 @@ function getCategoryName(categoryId: string | null): string {
             
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-2">
-                <h4 class="font-medium text-white truncate">{{ task.title }}</h4>
+                <h4 class="truncate font-medium text-foreground">{{ task.title }}</h4>
                 <span 
                   v-if="task.priority"
                   class="px-2 py-0.5 text-xs rounded-full text-white flex-shrink-0"
@@ -177,7 +182,7 @@ function getCategoryName(categoryId: string | null): string {
                 </span>
               </div>
               
-              <div class="flex items-center gap-4 text-sm text-gray-500 mb-3">
+              <div class="mb-3 flex items-center gap-4 text-sm text-muted-foreground">
                 <span class="flex items-center gap-1">
                   <Tag class="w-4 h-4" />
                   {{ getCategoryName(task.categoryId) }}
@@ -191,30 +196,35 @@ function getCategoryName(categoryId: string | null): string {
               <div class="flex items-center justify-between">
                 <span class="text-sm text-red-400">{{ getTimeRemaining(task.dueDate!) }}</span>
                 <div class="flex items-center gap-2">
-                  <button
+                  <Button
                     @click="remindersStore.markTaskComplete(task.id)"
-                    class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors flex items-center gap-1"
+                    size="sm"
+                    class="h-8 bg-green-600 hover:bg-green-700"
                   >
                     <CheckCircle class="w-4 h-4" />
                     标记完成
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     @click="remindersStore.dismissReminder(task.id)"
-                    class="px-3 py-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-700 text-sm rounded-lg transition-colors flex items-center gap-1"
+                    size="sm"
+                    variant="outline"
+                    class="h-8 border-border text-muted-foreground hover:text-foreground"
                   >
                     <X class="w-4 h-4" />
                     忽略
-                  </button>
-                  <button
-                    class="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-gray-700 rounded-lg transition-colors"
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    class="h-8 w-8 text-muted-foreground hover:text-primary"
                   >
                     <Eye class="w-4 h-4" />
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
             
-            <ChevronRight class="w-5 h-5 text-gray-600" />
+            <ChevronRight class="w-5 h-5 text-muted-foreground" />
           </div>
         </div>
       </div>
@@ -223,15 +233,15 @@ function getCategoryName(categoryId: string | null): string {
         <div class="flex items-center gap-2 mb-3">
           <Clock class="w-5 h-5 text-blue-400" />
           <h3 class="text-lg font-semibold text-blue-400">即将到期</h3>
-          <span class="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded-full">
+          <Badge class="bg-blue-500/20 text-blue-400">
             {{ remindersStore.upcomingTasks.length }}
-          </span>
+          </Badge>
         </div>
         
         <div
           v-for="task in remindersStore.upcomingTasks"
           :key="task.id"
-          class="bg-gray-800 rounded-xl p-4 border border-gray-700 hover:border-gray-600 transition-all cursor-pointer"
+          class="cursor-pointer rounded-xl border border-border/80 bg-card p-4 transition-all hover:border-border"
         >
           <div class="flex items-start gap-4">
             <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -240,7 +250,7 @@ function getCategoryName(categoryId: string | null): string {
             
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-2">
-                <h4 class="font-medium text-white truncate">{{ task.title }}</h4>
+                <h4 class="truncate font-medium text-foreground">{{ task.title }}</h4>
                 <span 
                   v-if="task.priority"
                   class="px-2 py-0.5 text-xs rounded-full text-white flex-shrink-0"
@@ -250,7 +260,7 @@ function getCategoryName(categoryId: string | null): string {
                 </span>
               </div>
               
-              <div class="flex items-center gap-4 text-sm text-gray-500 mb-3">
+              <div class="mb-3 flex items-center gap-4 text-sm text-muted-foreground">
                 <span class="flex items-center gap-1">
                   <Tag class="w-4 h-4" />
                   {{ getCategoryName(task.categoryId) }}
@@ -264,30 +274,35 @@ function getCategoryName(categoryId: string | null): string {
               <div class="flex items-center justify-between">
                 <span class="text-sm text-blue-400">{{ getTimeRemaining(task.dueDate!) }}</span>
                 <div class="flex items-center gap-2">
-                  <button
+                  <Button
                     @click="remindersStore.markTaskComplete(task.id)"
-                    class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors flex items-center gap-1"
+                    size="sm"
+                    class="h-8 bg-green-600 hover:bg-green-700"
                   >
                     <CheckCircle class="w-4 h-4" />
                     标记完成
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     @click="remindersStore.dismissReminder(task.id)"
-                    class="px-3 py-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-700 text-sm rounded-lg transition-colors flex items-center gap-1"
+                    size="sm"
+                    variant="outline"
+                    class="h-8 border-border text-muted-foreground hover:text-foreground"
                   >
                     <X class="w-4 h-4" />
                     忽略
-                  </button>
-                  <button
-                    class="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-gray-700 rounded-lg transition-colors"
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    class="h-8 w-8 text-muted-foreground hover:text-primary"
                   >
                     <Eye class="w-4 h-4" />
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
             
-            <ChevronRight class="w-5 h-5 text-gray-600" />
+            <ChevronRight class="w-5 h-5 text-muted-foreground" />
           </div>
         </div>
       </div>

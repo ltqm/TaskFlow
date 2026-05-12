@@ -3,6 +3,8 @@ import { onMounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useTasksStore } from '@/stores/tasks'
 import Navigation from '@/components/Navigation.vue'
+import { Toaster } from 'vue-sonner'
+import ConfirmDialogHost from '@/components/ui/confirm-dialog/ConfirmDialogHost.vue'
 
 const authStore = useAuthStore()
 const tasksStore = useTasksStore()
@@ -21,13 +23,15 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-900">
+  <div class="dark min-h-screen bg-background text-foreground">
     <div v-if="isLoading" class="flex items-center justify-center h-screen">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      <div class="h-12 w-12 animate-spin rounded-full border-b-2 border-primary"></div>
     </div>
     <template v-else>
       <Navigation v-if="authStore.isAuthenticated" />
       <router-view />
     </template>
+    <Toaster theme="dark" rich-colors position="top-center" />
+    <ConfirmDialogHost />
   </div>
 </template>

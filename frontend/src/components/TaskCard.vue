@@ -3,6 +3,10 @@ import { ref } from 'vue'
 import type { Task } from '@/types'
 import { useTasksStore } from '@/stores/tasks'
 import { CheckCircle, Circle, Clock, Tag, Trash2, Edit3, FileText, ChevronDown, ChevronUp } from 'lucide-vue-next'
+import { useConfirm } from '@/composables/useConfirm'
+import { toast } from 'vue-sonner'
+import Button from '@/components/ui/button/Button.vue'
+import Badge from '@/components/ui/badge/Badge.vue'
 
 defineProps<{
   task: Task
@@ -15,6 +19,7 @@ const emit = defineEmits<{
 
 const tasksStore = useTasksStore()
 const showFullNotes = ref(false)
+const { confirm } = useConfirm()
 
 const priorityColors = {
   high: 'bg-red-500',
@@ -33,8 +38,14 @@ async function toggleComplete(task: Task) {
 }
 
 async function deleteTask(task: Task) {
-  if (confirm('确定要删除这个任务吗？')) {
+  const ok = await confirm({
+    title: '删除任务',
+    description: '确定要删除这个任务吗？此操作不可撤销。',
+    confirmText: '删除'
+  })
+  if (ok) {
     await tasksStore.deleteTaskById(task.id)
+    toast.success('任务已删除')
   }
 }
 
@@ -50,7 +61,7 @@ function getTruncatedNotes(notes: string, maxLength: number = 50) {
 
 <template>
   <div 
-    class="bg-gray-800 rounded-xl p-4 border border-gray-700 hover:border-gray-600 transition-all cursor-pointer"
+    class="cursor-pointer rounded-xl border border-border/80 bg-card p-4 transition-all hover:border-border"
     :class="{ 'opacity-60': task.isCompleted }"
     @click="emit('view', task)"
   >
@@ -58,7 +69,7 @@ function getTruncatedNotes(notes: string, maxLength: number = 50) {
       <button
         @click.stop="toggleComplete(task)"
         class="mt-1 transition-colors flex-shrink-0"
-        :class="task.isCompleted ? 'text-green-500' : 'text-gray-400 hover:text-white'"
+        :class="task.isCompleted ? 'text-green-500' : 'text-muted-foreground hover:text-foreground'"
       >
         <CheckCircle v-if="task.isCompleted" class="w-5 h-5" />
         <Circle v-else class="w-5 h-5" />
@@ -68,44 +79,46 @@ function getTruncatedNotes(notes: string, maxLength: number = 50) {
         <div class="flex items-center gap-2 mb-1">
           <h3 
             class="font-medium truncate"
-            :class="task.isCompleted ? 'text-gray-400 line-through' : 'text-white'"
+            :class="task.isCompleted ? 'text-muted-foreground line-through' : 'text-foreground'"
           >
             {{ task.title }}
           </h3>
-          <span 
+          <Badge
             v-if="task.priority"
-            class="px-2 py-0.5 text-xs rounded-full text-white flex-shrink-0"
-            :class="priorityColors[task.priority]"
+            class="flex-shrink-0 px-2 py-0.5 text-[11px] text-white"
+            :class="priorityColors[task.priority] + ' border-transparent'"
           >
             {{ priorityLabels[task.priority] }}
-          </span>
+          </Badge>
         </div>
 
-        <p v-if="task.description" class="text-gray-400 text-sm truncate mb-2">
+        <p v-if="task.description" class="mb-2 truncate text-sm text-muted-foreground">
           {{ task.description }}
         </p>
 
         <div v-if="task.notes" class="mb-2">
-          <div class="flex items-start gap-2 bg-gray-700/50 rounded-lg p-3">
+          <div class="flex items-start gap-2 rounded-lg bg-secondary/55 p-3">
             <FileText class="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
             <div class="flex-1 min-w-0">
-              <p class="text-gray-300 text-sm">
+              <p class="text-sm text-foreground/85">
                 {{ showFullNotes ? task.notes : getTruncatedNotes(task.notes) }}
               </p>
-              <button 
+              <Button
                 v-if="task.notes.length > 50"
                 @click.stop="toggleNotes"
-                class="text-blue-400 text-xs mt-1 hover:text-blue-300 flex items-center gap-1"
+                variant="ghost"
+                size="sm"
+                class="mt-1 h-6 items-center gap-1 px-1.5 text-xs text-primary hover:text-primary/90"
               >
                 {{ showFullNotes ? '收起' : '展开' }}
                 <ChevronUp v-if="showFullNotes" class="w-3 h-3" />
                 <ChevronDown v-else class="w-3 h-3" />
-              </button>
+              </Button>
             </div>
           </div>
         </div>
 
-        <div class="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
+        <div class="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
           <span v-if="task.category" class="flex items-center gap-1">
             <Tag class="w-3 h-3" />
             {{ task.category }}
@@ -123,29 +136,33 @@ function getTruncatedNotes(notes: string, maxLength: number = 50) {
               <span 
                 v-for="tag in task.tags.slice(0, 3)" 
                 :key="tag"
-                class="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300"
+                class="rounded bg-secondary px-1.5 py-0.5 text-foreground/85"
               >
                 {{ tag }}
               </span>
-              <span v-if="task.tags.length > 3" class="text-gray-400">+{{ task.tags.length - 3 }}</span>
+              <span v-if="task.tags.length > 3" class="text-muted-foreground">+{{ task.tags.length - 3 }}</span>
             </span>
           </span>
         </div>
       </div>
 
       <div class="flex items-center gap-1 opacity-0 hover:opacity-100 transition-opacity flex-shrink-0">
-        <button
+        <Button
           @click.stop="emit('edit', task)"
-          class="p-2 text-gray-400 hover:text-blue-400 hover:bg-gray-700 rounded-lg transition-all"
+          variant="ghost"
+          size="icon"
+          class="h-8 w-8 text-muted-foreground hover:text-primary"
         >
           <Edit3 class="w-4 h-4" />
-        </button>
-        <button
+        </Button>
+        <Button
           @click.stop="deleteTask(task)"
-          class="p-2 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded-lg transition-all"
+          variant="ghost"
+          size="icon"
+          class="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
         >
           <Trash2 class="w-4 h-4" />
-        </button>
+        </Button>
       </div>
     </div>
   </div>

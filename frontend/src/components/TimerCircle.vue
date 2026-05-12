@@ -16,7 +16,7 @@ const strokeDashoffset = computed(() => {
 })
 
 const timerColor = computed(() => {
-  return timerStore.mode === 'work' ? '#0ea5e9' : '#22c55e'
+  return timerStore.mode === 'work' ? 'hsl(var(--primary))' : '#22c55e'
 })
 
 let intervalId: number | null = null
@@ -60,7 +60,7 @@ onUnmounted(() => {
           cy="130"
           r="120"
           fill="none"
-          stroke="#e2e8f0"
+          stroke="hsl(var(--secondary))"
           stroke-width="12"
         />
         <circle
@@ -77,23 +77,23 @@ onUnmounted(() => {
         />
       </svg>
       <div class="absolute inset-0 flex flex-col items-center justify-center">
-        <span class="text-5xl font-bold text-gray-800">{{ timerStore.formattedTime }}</span>
-        <span class="mt-2 text-sm text-gray-500">{{ timerStore.modeText }}</span>
+        <span class="text-5xl font-bold text-foreground">{{ timerStore.formattedTime }}</span>
+        <span class="mt-2 text-sm text-muted-foreground">{{ timerStore.modeText }}</span>
       </div>
     </div>
     
     <div class="mt-8 flex items-center gap-4">
       <button
         @click="timerStore.reset()"
-        class="p-3 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+        class="rounded-full bg-secondary p-3 transition-colors hover:bg-accent"
       >
-        <RotateCcw class="w-5 h-5 text-gray-600" />
+        <RotateCcw class="h-5 w-5 text-foreground/80" />
       </button>
       
       <button
         @click="toggleTimer"
         class="p-5 rounded-full transition-all duration-200 shadow-lg"
-        :class="timerStore.isRunning ? 'bg-red-500 hover:bg-red-600' : 'bg-primary-500 hover:bg-primary-600'"
+        :class="timerStore.isRunning ? 'bg-red-500 hover:bg-red-600' : 'bg-primary hover:bg-primary/90'"
       >
         <Pause v-if="timerStore.isRunning" class="w-8 h-8 text-white" />
         <Play v-else class="w-8 h-8 text-white ml-1" />
@@ -101,18 +101,18 @@ onUnmounted(() => {
       
       <button
         @click="timerStore.setMode(timerStore.mode === 'work' ? 'break' : 'work')"
-        class="p-3 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+        class="rounded-full bg-secondary p-3 transition-colors hover:bg-accent"
       >
-        <span class="text-sm font-medium text-gray-600">
+        <span class="text-sm font-medium text-foreground/85">
           {{ timerStore.mode === 'work' ? '休息' : '工作' }}
         </span>
       </button>
     </div>
     
     <div class="mt-6 flex items-center gap-2">
-      <span class="text-sm text-gray-500">今日完成</span>
-      <span class="text-xl font-bold text-primary-500">{{ statsStore.todayStats.pomodoros }}</span>
-      <span class="text-sm text-gray-500">个番茄</span>
+      <span class="text-sm text-muted-foreground">今日完成</span>
+      <span class="text-xl font-bold text-primary">{{ statsStore.todayStats.pomodoros }}</span>
+      <span class="text-sm text-muted-foreground">个番茄</span>
     </div>
   </div>
 </template>

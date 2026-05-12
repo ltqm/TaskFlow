@@ -10,22 +10,22 @@ defineProps<{
 }>()
 
 const colorClasses = {
-  primary: 'bg-primary-50 text-primary-600',
-  green: 'bg-green-50 text-green-600',
-  purple: 'bg-purple-50 text-purple-600',
-  orange: 'bg-orange-50 text-orange-600'
+  primary: 'bg-primary/15 text-primary',
+  green: 'bg-emerald-500/15 text-emerald-400',
+  purple: 'bg-violet-500/15 text-violet-400',
+  orange: 'bg-amber-500/15 text-amber-400'
 }
 </script>
 
 <template>
-  <div class="card flex items-center gap-4">
+  <div class="flex items-center gap-4 rounded-xl border border-border/80 bg-card p-4 text-card-foreground">
     <div class="p-3 rounded-xl" :class="colorClasses[color]">
       <component :is="icon" class="w-6 h-6" />
     </div>
     <div>
-      <p class="text-sm text-gray-500">{{ title }}</p>
-      <p class="text-2xl font-bold text-gray-800">{{ value }}</p>
-      <p v-if="description" class="text-xs text-gray-400">{{ description }}</p>
+      <p class="text-sm text-muted-foreground">{{ title }}</p>
+      <p class="text-2xl font-bold text-foreground">{{ value }}</p>
+      <p v-if="description" class="text-xs text-muted-foreground">{{ description }}</p>
     </div>
   </div>
 </template>

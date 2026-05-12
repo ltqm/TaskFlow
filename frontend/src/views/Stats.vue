@@ -13,10 +13,17 @@ import {
   ArcElement
 } from 'chart.js'
 import { TrendingUp, Target, Calendar, Award } from 'lucide-vue-next'
+import Card from '@/components/ui/card/Card.vue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement)
 
 const tasksStore = useTasksStore()
+
+function resolveToken(name: string, fallback: string) {
+  if (typeof window === 'undefined') return fallback
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return value ? `hsl(${value})` : fallback
+}
 
 const completionRate = computed(() => {
   const total = tasksStore.tasks.length
@@ -61,18 +68,28 @@ const weeklyData = computed(() => {
   return { labels: days, data }
 })
 
-const barChartData = {
+const chartPalette = computed(() => ({
+  primary: resolveToken('--chart-1', '#3b82f6'),
+  secondary: resolveToken('--chart-2', '#10b981'),
+  third: resolveToken('--chart-3', '#f59e0b'),
+  fourth: resolveToken('--chart-4', '#8b5cf6'),
+  fifth: resolveToken('--chart-5', '#ec4899'),
+  muted: resolveToken('--muted-foreground', '#9ca3af'),
+  grid: resolveToken('--border', '#374151')
+}))
+
+const barChartData = computed(() => ({
   labels: weeklyData.value.labels,
   datasets: [
     {
       label: '创建任务数',
-      backgroundColor: 'rgba(59, 130, 246, 0.8)',
-      borderColor: 'rgb(59, 130, 246)',
+      backgroundColor: chartPalette.value.primary,
+      borderColor: chartPalette.value.primary,
       borderWidth: 1,
       data: weeklyData.value.data
     }
   ]
-}
+}))
 
 const doughnutChartData = computed(() => {
   const labels = Object.keys(tasksByCategory.value)
@@ -84,12 +101,12 @@ const doughnutChartData = computed(() => {
       {
         data,
         backgroundColor: [
-          'rgba(59, 130, 246, 0.8)',
-          'rgba(16, 185, 129, 0.8)',
-          'rgba(245, 158, 11, 0.8)',
-          'rgba(139, 92, 246, 0.8)',
-          'rgba(239, 68, 68, 0.8)',
-          'rgba(236, 72, 153, 0.8)'
+          chartPalette.value.primary,
+          chartPalette.value.secondary,
+          chartPalette.value.third,
+          chartPalette.value.fourth,
+          chartPalette.value.fifth,
+          chartPalette.value.secondary
         ],
         borderWidth: 0
       }
@@ -97,149 +114,149 @@ const doughnutChartData = computed(() => {
   }
 })
 
-const chartOptions = {
+const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
     legend: {
       position: 'bottom' as const,
       labels: {
-        color: '#9CA3AF',
+        color: chartPalette.value.muted,
         padding: 20
       }
     }
   },
   scales: {
     x: {
-      ticks: { color: '#9CA3AF' },
-      grid: { color: '#374151' }
+      ticks: { color: chartPalette.value.muted },
+      grid: { color: chartPalette.value.grid }
     },
     y: {
-      ticks: { color: '#9CA3AF' },
-      grid: { color: '#374151' }
+      ticks: { color: chartPalette.value.muted },
+      grid: { color: chartPalette.value.grid }
     }
   }
-}
+}))
 
-const doughnutOptions = {
+const doughnutOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
     legend: {
       position: 'bottom' as const,
       labels: {
-        color: '#9CA3AF',
+        color: chartPalette.value.muted,
         padding: 20
       }
     }
   }
-}
+}))
 </script>
 
 <template>
-  <div class="ml-64 p-8">
+  <div class="ml-64 min-h-screen bg-background p-8">
     <div class="mb-8">
-      <h1 class="text-3xl font-bold text-white">统计分析</h1>
-      <p class="text-gray-400 mt-2">查看你的任务完成情况</p>
+      <h1 class="text-3xl font-bold tracking-tight text-foreground">统计分析</h1>
+      <p class="mt-2 text-muted-foreground">查看你的任务完成情况</p>
     </div>
 
     <div class="grid grid-cols-4 gap-6 mb-8">
-      <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+      <Card class="p-6">
         <div class="flex items-center justify-between mb-4">
-          <span class="text-gray-400">完成率</span>
-          <div class="w-10 h-10 bg-blue-600/20 rounded-lg flex items-center justify-center">
+          <span class="text-muted-foreground">完成率</span>
+          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15">
             <TrendingUp class="w-5 h-5 text-blue-500" />
           </div>
         </div>
-        <div class="text-3xl font-bold text-white">{{ completionRate }}%</div>
-        <div class="mt-2 w-full bg-gray-700 rounded-full h-2">
+        <div class="text-3xl font-bold text-foreground">{{ completionRate }}%</div>
+        <div class="mt-2 h-2 w-full rounded-full bg-secondary">
           <div 
             class="bg-blue-600 h-2 rounded-full transition-all duration-500"
             :style="{ width: `${completionRate}%` }"
           />
         </div>
-      </div>
+      </Card>
 
-      <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+      <Card class="p-6">
         <div class="flex items-center justify-between mb-4">
-          <span class="text-gray-400">本周新增</span>
-          <div class="w-10 h-10 bg-green-600/20 rounded-lg flex items-center justify-center">
+          <span class="text-muted-foreground">本周新增</span>
+          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/15">
             <Calendar class="w-5 h-5 text-green-500" />
           </div>
         </div>
-        <div class="text-3xl font-bold text-white">{{ weeklyData.data.reduce((a, b) => a + b, 0) }}</div>
-        <p class="text-gray-500 text-sm mt-1">任务</p>
-      </div>
+        <div class="text-3xl font-bold text-foreground">{{ weeklyData.data.reduce((a, b) => a + b, 0) }}</div>
+        <p class="mt-1 text-sm text-muted-foreground">任务</p>
+      </Card>
 
-      <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+      <Card class="p-6">
         <div class="flex items-center justify-between mb-4">
-          <span class="text-gray-400">待完成</span>
-          <div class="w-10 h-10 bg-yellow-600/20 rounded-lg flex items-center justify-center">
+          <span class="text-muted-foreground">待完成</span>
+          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/15">
             <Target class="w-5 h-5 text-yellow-500" />
           </div>
         </div>
-        <div class="text-3xl font-bold text-white">{{ tasksStore.pendingTasks.length }}</div>
-        <p class="text-gray-500 text-sm mt-1">任务</p>
-      </div>
+        <div class="text-3xl font-bold text-foreground">{{ tasksStore.pendingTasks.length }}</div>
+        <p class="mt-1 text-sm text-muted-foreground">任务</p>
+      </Card>
 
-      <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+      <Card class="p-6">
         <div class="flex items-center justify-between mb-4">
-          <span class="text-gray-400">已完成</span>
-          <div class="w-10 h-10 bg-purple-600/20 rounded-lg flex items-center justify-center">
+          <span class="text-muted-foreground">已完成</span>
+          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/15">
             <Award class="w-5 h-5 text-purple-500" />
           </div>
         </div>
-        <div class="text-3xl font-bold text-white">{{ tasksStore.completedTasks.length }}</div>
-        <p class="text-gray-500 text-sm mt-1">任务</p>
-      </div>
+        <div class="text-3xl font-bold text-foreground">{{ tasksStore.completedTasks.length }}</div>
+        <p class="mt-1 text-sm text-muted-foreground">任务</p>
+      </Card>
     </div>
 
     <div class="grid grid-cols-2 gap-8">
-      <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
-        <h3 class="text-lg font-semibold text-white mb-6">本周任务趋势</h3>
+      <Card class="p-6">
+        <h3 class="mb-6 text-lg font-semibold text-foreground">本周任务趋势</h3>
         <div class="h-64">
           <Bar :data="barChartData" :options="chartOptions" />
         </div>
-      </div>
+      </Card>
 
-      <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
-        <h3 class="text-lg font-semibold text-white mb-6">任务分类分布</h3>
+      <Card class="p-6">
+        <h3 class="mb-6 text-lg font-semibold text-foreground">任务分类分布</h3>
         <div class="h-64">
           <Doughnut :data="doughnutChartData" :options="doughnutOptions" />
         </div>
-      </div>
+      </Card>
     </div>
 
-    <div class="mt-8 bg-gray-800 rounded-xl p-6 border border-gray-700">
-      <h3 class="text-lg font-semibold text-white mb-6">分类详情</h3>
+    <Card class="mt-8 p-6">
+      <h3 class="mb-6 text-lg font-semibold text-foreground">分类详情</h3>
       <div class="overflow-x-auto">
         <table class="w-full">
           <thead>
-            <tr class="border-b border-gray-700">
-              <th class="text-left py-3 px-4 text-gray-400 font-medium">分类</th>
-              <th class="text-center py-3 px-4 text-gray-400 font-medium">总数</th>
-              <th class="text-center py-3 px-4 text-gray-400 font-medium">已完成</th>
-              <th class="text-center py-3 px-4 text-gray-400 font-medium">完成率</th>
+            <tr class="border-b border-border/80">
+              <th class="px-4 py-3 text-left font-medium text-muted-foreground">分类</th>
+              <th class="px-4 py-3 text-center font-medium text-muted-foreground">总数</th>
+              <th class="px-4 py-3 text-center font-medium text-muted-foreground">已完成</th>
+              <th class="px-4 py-3 text-center font-medium text-muted-foreground">完成率</th>
             </tr>
           </thead>
           <tbody>
             <tr 
               v-for="(stats, category) in tasksByCategory" 
               :key="category"
-              class="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors"
+              class="border-b border-border/70 transition-colors hover:bg-secondary/45"
             >
-              <td class="py-3 px-4 text-white">{{ category }}</td>
-              <td class="py-3 px-4 text-center text-gray-300">{{ stats.total }}</td>
+              <td class="px-4 py-3 text-foreground">{{ category }}</td>
+              <td class="px-4 py-3 text-center text-foreground/85">{{ stats.total }}</td>
               <td class="py-3 px-4 text-center text-green-400">{{ stats.completed }}</td>
               <td class="py-3 px-4">
                 <div class="flex items-center justify-center gap-3">
-                  <div class="w-24 bg-gray-700 rounded-full h-2">
+                  <div class="h-2 w-24 rounded-full bg-secondary">
                     <div 
                       class="bg-green-500 h-2 rounded-full"
                       :style="{ width: stats.total ? `${(stats.completed / stats.total) * 100}%` : '0%' }"
                     />
                   </div>
-                  <span class="text-gray-400 text-sm">
+                  <span class="text-sm text-muted-foreground">
                     {{ stats.total ? Math.round((stats.completed / stats.total) * 100) : 0 }}%
                   </span>
                 </div>
@@ -248,6 +265,6 @@ const doughnutOptions = {
           </tbody>
         </table>
       </div>
-    </div>
+    </Card>
   </div>
 </template>

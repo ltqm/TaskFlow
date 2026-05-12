@@ -6,13 +6,14 @@ import {
   updateSubTask, 
   deleteSubTask 
 } from '../database'
+import { fail, ok } from '../utils/response'
 
 export async function createSubTaskHandler(req: Request, res: Response) {
   try {
     const { taskId, title, description } = req.body
     
     if (!taskId || !title) {
-      return res.status(400).json({ error: '任务ID和标题必填' })
+      return fail(res, 400, 50011, '任务ID和标题必填')
     }
     
     const subTask = createSubTask({
@@ -22,9 +23,13 @@ export async function createSubTaskHandler(req: Request, res: Response) {
       isCompleted: false
     })
     
-    res.status(201).json(subTask)
+    return res.status(201).json({
+      code: 0,
+      data: subTask,
+      msg: ''
+    })
   } catch (error) {
-    res.status(500).json({ error: '创建子任务失败' })
+    return fail(res, 500, 50099, '创建子任务失败')
   }
 }
 
@@ -33,13 +38,13 @@ export async function getSubTasksHandler(req: Request, res: Response) {
     const { taskId } = req.params
     
     if (!taskId) {
-      return res.status(400).json({ error: '任务ID必填' })
+      return fail(res, 400, 50012, '任务ID必填')
     }
     
     const subTasks = getSubTasksByTaskId(taskId)
-    res.json(subTasks)
+    return ok(res, subTasks)
   } catch (error) {
-    res.status(500).json({ error: '获取子任务失败' })
+    return fail(res, 500, 50098, '获取子任务失败')
   }
 }
 
@@ -49,12 +54,12 @@ export async function getSubTaskHandler(req: Request, res: Response) {
     
     const subTask = getSubTaskById(id)
     if (!subTask) {
-      return res.status(404).json({ error: '子任务不存在' })
+      return fail(res, 404, 50001, '子任务不存在')
     }
     
-    res.json(subTask)
+    return ok(res, subTask)
   } catch (error) {
-    res.status(500).json({ error: '获取子任务失败' })
+    return fail(res, 500, 50097, '获取子任务失败')
   }
 }
 
@@ -65,12 +70,12 @@ export async function updateSubTaskHandler(req: Request, res: Response) {
     
     const subTask = updateSubTask(id, updates)
     if (!subTask) {
-      return res.status(404).json({ error: '子任务不存在' })
+      return fail(res, 404, 50001, '子任务不存在')
     }
     
-    res.json(subTask)
+    return ok(res, subTask)
   } catch (error) {
-    res.status(500).json({ error: '更新子任务失败' })
+    return fail(res, 500, 50096, '更新子任务失败')
   }
 }
 
@@ -80,11 +85,11 @@ export async function deleteSubTaskHandler(req: Request, res: Response) {
     
     const success = deleteSubTask(id)
     if (!success) {
-      return res.status(404).json({ error: '子任务不存在' })
+      return fail(res, 404, 50001, '子任务不存在')
     }
     
-    res.json({ message: '删除成功' })
+    return ok(res, null, '删除成功')
   } catch (error) {
-    res.status(500).json({ error: '删除子任务失败' })
+    return fail(res, 500, 50095, '删除子任务失败')
   }
 }

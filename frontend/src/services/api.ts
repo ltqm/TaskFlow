@@ -1,7 +1,8 @@
 import axios from 'axios'
+import type { AxiosResponse } from 'axios'
 import type { Task, Category, User, Version, SubTask } from '@/types'
 
-const API_BASE_URL = 'http://localhost:3000/api'
+const API_BASE_URL = 'http://localhost:8088/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -9,6 +10,40 @@ const api = axios.create({
     'Content-Type': 'application/json'
   }
 })
+
+interface ApiEnvelope<T> {
+  code: number
+  data: T
+  msg: string
+}
+
+function isApiEnvelope<T>(payload: unknown): payload is ApiEnvelope<T> {
+  if (!payload || typeof payload !== 'object') return false
+  return 'code' in payload && 'data' in payload && 'msg' in payload
+}
+
+function createApiError(message: string, code?: number) {
+  const error = new Error(message) as Error & { code?: number }
+  if (typeof code === 'number') {
+    error.code = code
+  }
+  return error
+}
+
+function unwrapResponse<T>(payload: unknown): T {
+  if (isApiEnvelope<T>(payload)) {
+    if (payload.code === 0) return payload.data
+    throw createApiError(payload.msg || '请求失败', payload.code)
+  }
+
+  // 兼容老接口结构，便于渐进迁移
+  return payload as T
+}
+
+async function requestData<T>(request: Promise<AxiosResponse<ApiEnvelope<T> | T>>): Promise<T> {
+  const response = await request
+  return unwrapResponse<T>(response.data)
+}
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
@@ -21,6 +56,10 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const message = (error as { response?: { data?: { msg?: string } } })?.response?.data?.msg
+    if (message && typeof message === 'string') {
+      error.message = message
+    }
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
@@ -31,38 +70,31 @@ api.interceptors.response.use(
 )
 
 export async function register(username: string, email: string, password: string) {
-  const response = await api.post('/auth/register', { username, email, password })
-  return response.data
+  return requestData(api.post('/auth/register', { username, email, password }))
 }
 
 export async function login(email: string, password: string) {
-  const response = await api.post('/auth/login', { email, password })
-  return response.data
+  return requestData(api.post('/auth/login', { email, password }))
 }
 
 export async function getUser(): Promise<User> {
-  const response = await api.get('/auth/user')
-  return response.data
+  return requestData<User>(api.get('/auth/user'))
 }
 
 export async function getTasks(): Promise<Task[]> {
-  const response = await api.get('/tasks')
-  return response.data
+  return requestData<Task[]>(api.get('/tasks'))
 }
 
 export async function getTaskById(id: string): Promise<Task> {
-  const response = await api.get(`/tasks/${id}`)
-  return response.data
+  return requestData<Task>(api.get(`/tasks/${id}`))
 }
 
 export async function createTask(task: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'completedPomodoros' | 'isCompleted' | 'category' | 'versionName'>): Promise<Task> {
-  const response = await api.post('/tasks', task)
-  return response.data
+  return requestData<Task>(api.post('/tasks', task))
 }
 
 export async function updateTask(id: string, updates: Partial<Task>): Promise<Task> {
-  const response = await api.put(`/tasks/${id}`, updates)
-  return response.data
+  return requestData<Task>(api.put(`/tasks/${id}`, updates))
 }
 
 export async function deleteTask(id: string): Promise<void> {
@@ -70,18 +102,15 @@ export async function deleteTask(id: string): Promise<void> {
 }
 
 export async function getCategories(): Promise<Category[]> {
-  const response = await api.get('/categories')
-  return response.data
+  return requestData<Category[]>(api.get('/categories'))
 }
 
 export async function createCategory(name: string, color: string): Promise<Category> {
-  const response = await api.post('/categories', { name, color })
-  return response.data
+  return requestData<Category>(api.post('/categories', { name, color }))
 }
 
 export async function updateCategory(id: string, name: string, color: string): Promise<Category> {
-  const response = await api.put(`/categories/${id}`, { name, color })
-  return response.data
+  return requestData<Category>(api.put(`/categories/${id}`, { name, color }))
 }
 
 export async function deleteCategory(id: string): Promise<void> {
@@ -89,28 +118,23 @@ export async function deleteCategory(id: string): Promise<void> {
 }
 
 export async function getVersions(): Promise<Version[]> {
-  const response = await api.get('/versions')
-  return response.data
+  return requestData<Version[]>(api.get('/versions'))
 }
 
 export async function getVersionById(id: string): Promise<Version & { tasks: Task[] }> {
-  const response = await api.get(`/versions/${id}`)
-  return response.data
+  return requestData<Version & { tasks: Task[] }>(api.get(`/versions/${id}`))
 }
 
 export async function getTasksByVersion(id: string): Promise<Task[]> {
-  const response = await api.get(`/versions/${id}/tasks`)
-  return response.data
+  return requestData<Task[]>(api.get(`/versions/${id}/tasks`))
 }
 
 export async function createVersion(name: string, description: string, releaseDate: string): Promise<Version> {
-  const response = await api.post('/versions', { name, description, releaseDate })
-  return response.data
+  return requestData<Version>(api.post('/versions', { name, description, releaseDate }))
 }
 
 export async function updateVersion(id: string, name: string, description: string, releaseDate: string): Promise<Version> {
-  const response = await api.put(`/versions/${id}`, { name, description, releaseDate })
-  return response.data
+  return requestData<Version>(api.put(`/versions/${id}`, { name, description, releaseDate }))
 }
 
 export async function deleteVersion(id: string): Promise<void> {
@@ -118,18 +142,18 @@ export async function deleteVersion(id: string): Promise<void> {
 }
 
 export async function getSubTasks(taskId: string): Promise<SubTask[]> {
-  const response = await api.get(`/subtasks/${taskId}`)
-  return response.data
+  const data = await requestData<SubTask[] | { subTasks: SubTask[] }>(api.get(`/subtasks/${taskId}`))
+  if (Array.isArray(data)) return data
+  if (data && Array.isArray(data.subTasks)) return data.subTasks
+  return []
 }
 
 export async function createSubTask(taskId: string, title: string, description?: string): Promise<SubTask> {
-  const response = await api.post('/subtasks', { taskId, title, description })
-  return response.data
+  return requestData<SubTask>(api.post('/subtasks', { taskId, title, description }))
 }
 
 export async function updateSubTask(id: string, updates: Partial<SubTask>): Promise<SubTask> {
-  const response = await api.put(`/subtasks/${id}`, updates)
-  return response.data
+  return requestData<SubTask>(api.put(`/subtasks/${id}`, updates))
 }
 
 export async function deleteSubTask(id: string): Promise<void> {

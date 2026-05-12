@@ -1,10 +1,21 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import type { DateValue } from '@internationalized/date'
+import { getLocalTimeZone, parseDate } from '@internationalized/date'
 import { useTasksStore } from '@/stores/tasks'
 import TaskCard from '@/components/TaskCard.vue'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
-import { Plus, Search, Filter, X, Tag, Clock, AlertCircle } from 'lucide-vue-next'
+import { Plus, Search, Filter, X, Tag, Clock, AlertCircle, Calendar as CalendarIcon } from 'lucide-vue-next'
 import type { Task } from '@/types'
+import { toast } from 'vue-sonner'
+import Button from '@/components/ui/button/Button.vue'
+import Calendar from '@/components/ui/calendar/Calendar.vue'
+import Input from '@/components/ui/input/Input.vue'
+import Popover from '@/components/ui/popover/Popover.vue'
+import PopoverContent from '@/components/ui/popover/PopoverContent.vue'
+import PopoverTrigger from '@/components/ui/popover/PopoverTrigger.vue'
+import Textarea from '@/components/ui/textarea/Textarea.vue'
+import Label from '@/components/ui/label/Label.vue'
 
 const tasksStore = useTasksStore()
 
@@ -12,6 +23,7 @@ const showModal = ref(false)
 const showDetailModal = ref(false)
 const isEditing = ref(false)
 const searchQuery = ref('')
+const dueDateOpen = ref(false)
 const selectedCategory = ref<string>('')
 const selectedPriority = ref('all')
 
@@ -30,6 +42,20 @@ const form = ref({
 
 const editingTask = ref<Task | null>(null)
 const viewingTask = ref<Task | null>(null)
+
+const dueDateValue = computed<DateValue | undefined>(() => {
+  if (!form.value.dueDate) return undefined
+  try {
+    return parseDate(form.value.dueDate.slice(0, 10))
+  } catch {
+    return undefined
+  }
+})
+
+const dueDateLabel = computed(() => {
+  if (!dueDateValue.value) return '请选择截止日期'
+  return dueDateValue.value.toDate(getLocalTimeZone()).toLocaleDateString('zh-CN')
+})
 
 const filteredTasks = computed(() => {
   let result = tasksStore.tasks
@@ -101,6 +127,7 @@ function openModal() {
 
 function closeModal() {
   showModal.value = false
+  dueDateOpen.value = false
 }
 
 function openDetailModal(task: Task) {
@@ -114,6 +141,10 @@ function closeDetailModal() {
 }
 
 function editTask(task: Task) {
+  if (showDetailModal.value) {
+    closeDetailModal()
+  }
+
   editingTask.value = task
   form.value = {
     title: task.title,
@@ -134,7 +165,7 @@ function editTask(task: Task) {
 async function handleSubmit() {
   try {
     if (!form.value.title.trim()) {
-      alert('请输入任务标题')
+      toast.error('请输入任务标题')
       return
     }
 
@@ -166,9 +197,10 @@ async function handleSubmit() {
       })
     }
     closeModal()
+    toast.success(isEditing.value ? '任务修改成功' : '任务创建成功')
   } catch (error) {
     console.error('Failed to save task:', error)
-    alert('保存任务失败')
+    toast.error('保存任务失败')
   }
 }
 
@@ -183,6 +215,11 @@ function removeTag(tag: string) {
   form.value.tags = form.value.tags.filter(t => t !== tag)
 }
 
+function handleDueDateSelect(value: DateValue | undefined) {
+  form.value.dueDate = value ? value.toString() : ''
+  dueDateOpen.value = false
+}
+
 onMounted(async () => {
   if (!tasksStore.categories.length) {
     await tasksStore.fetchCategories()
@@ -191,37 +228,37 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="ml-64 p-8">
+  <div class="ml-64 min-h-screen bg-background p-8">
     <div class="flex items-center justify-between mb-8">
       <div>
-        <h1 class="text-3xl font-bold text-white">任务管理</h1>
-        <p class="text-gray-400 mt-1">管理你的日常任务和待办事项</p>
+        <h1 class="text-3xl font-bold tracking-tight text-foreground">任务管理</h1>
+        <p class="mt-1 text-muted-foreground">管理你的日常任务和待办事项</p>
       </div>
-      <button
+      <Button
         @click="openModal"
-        class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+        class="h-10 rounded-lg"
       >
         <Plus class="w-5 h-5" />
         新建任务
-      </button>
+      </Button>
     </div>
 
-    <div class="bg-gray-800 rounded-xl p-4 mb-6 border border-gray-700">
+    <div class="mb-6 rounded-xl border border-border/80 bg-card p-4">
       <div class="flex items-center gap-4">
         <div class="flex-1 relative">
-          <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
+          <Search class="absolute left-3 top-1/2 w-5 -translate-y-1/2 text-muted-foreground" />
+          <Input
             v-model="searchQuery"
             type="text"
             placeholder="搜索任务..."
-            class="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            class="h-10 rounded-lg bg-secondary pl-10"
           />
         </div>
         <div class="flex items-center gap-2">
-          <Filter class="w-5 h-5 text-gray-400" />
+          <Filter class="w-5 h-5 text-muted-foreground" />
           <select
             v-model="selectedCategory"
-            class="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            class="h-10 rounded-lg border border-input bg-secondary px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option v-for="cat in categoryOptions" :key="cat.id" :value="cat.id">
               {{ cat.name }}
@@ -229,7 +266,7 @@ onMounted(async () => {
           </select>
           <select
             v-model="selectedPriority"
-            class="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            class="h-10 rounded-lg border border-input bg-secondary px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option v-for="p in priorityOptions" :key="p.value" :value="p.value">
               {{ p.label }}
@@ -239,12 +276,12 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div v-if="filteredTasks.length === 0" class="bg-gray-800 rounded-xl p-12 border border-gray-700 text-center">
-      <div class="w-20 h-20 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-        <Tag class="w-10 h-10 text-gray-500" />
+    <div v-if="filteredTasks.length === 0" class="rounded-xl border border-border/80 bg-card p-12 text-center">
+      <div class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-secondary">
+        <Tag class="w-10 h-10 text-muted-foreground" />
       </div>
-      <h3 class="text-xl font-semibold text-gray-300 mb-2">暂无任务</h3>
-      <p class="text-gray-500">点击右上角按钮创建你的第一个任务</p>
+      <h3 class="mb-2 text-xl font-semibold text-foreground">暂无任务</h3>
+      <p class="text-muted-foreground">点击右上角按钮创建你的第一个任务</p>
     </div>
 
     <div v-else class="grid grid-cols-3 gap-4">
@@ -258,41 +295,41 @@ onMounted(async () => {
     </div>
 
     <Teleport to="body">
-      <div v-if="showModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div class="bg-gray-800 rounded-xl w-full max-w-lg border border-gray-700">
-          <div class="border-b border-gray-700 p-4">
+      <div v-if="showModal" class="z-overlay-modal fixed inset-0 flex items-center justify-center bg-black/82 px-4 py-6 backdrop-blur-sm">
+        <div class="w-full max-w-2xl overflow-hidden rounded-xl border border-border/95 bg-card shadow-[0_24px_60px_-28px_rgba(0,0,0,0.75)]">
+          <div class="border-b border-border/80 bg-card/95 px-6 py-4 backdrop-blur">
             <div class="flex items-center justify-between">
-              <h2 class="text-lg font-semibold text-white">{{ isEditing ? '编辑任务' : '新建任务' }}</h2>
-              <button @click="closeModal" class="p-2 text-gray-400 hover:text-white transition-colors">
+              <h2 class="text-lg font-semibold text-foreground">{{ isEditing ? '编辑任务' : '新建任务' }}</h2>
+              <button @click="closeModal" class="rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
                 <X class="w-5 h-5" />
               </button>
             </div>
           </div>
-          <div class="p-4 space-y-4">
+          <div class="space-y-4 px-6 py-5">
             <div>
-              <label class="block text-sm font-medium text-gray-300 mb-1">任务标题 *</label>
-              <input
+              <Label class="mb-1.5 block">任务标题 *</Label>
+              <Input
                 v-model="form.title"
                 type="text"
-                class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="输入任务标题"
+                class="h-10 bg-secondary"
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-300 mb-1">任务描述</label>
-              <textarea
+              <Label class="mb-1.5 block">任务描述</Label>
+              <Textarea
                 v-model="form.description"
-                class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 rows="3"
                 placeholder="输入任务描述"
+                class="bg-secondary resize-none"
               />
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">分类</label>
+                <Label class="mb-1.5 block">分类</Label>
                 <select
                   v-model="form.categoryId"
-                  class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  class="h-10 w-full rounded-md border border-input bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option :value="null">未分类</option>
                   <option v-for="cat in tasksStore.categories" :key="cat.id" :value="cat.id">
@@ -301,10 +338,10 @@ onMounted(async () => {
                 </select>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">优先级</label>
+                <Label class="mb-1.5 block">优先级</Label>
                 <select
                   v-model="form.priority"
-                  class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  class="h-10 w-full rounded-md border border-input bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="high">高优先级</option>
                   <option value="medium">中优先级</option>
@@ -314,72 +351,88 @@ onMounted(async () => {
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">
+                <Label class="mb-1.5 block">
                   <Clock class="w-4 h-4 inline mr-1" />
                   截止日期
-                </label>
-                <input
-                  v-model="form.dueDate"
-                  type="date"
-                  class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                </Label>
+                <Popover v-model:open="dueDateOpen">
+                  <PopoverTrigger as-child>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      class="h-10 w-full justify-between bg-secondary font-normal text-foreground"
+                    >
+                      <span :class="dueDateValue ? 'text-foreground' : 'text-muted-foreground'">
+                        {{ dueDateLabel }}
+                      </span>
+                      <CalendarIcon class="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent class="w-auto overflow-hidden p-0" align="start">
+                    <Calendar
+                      :model-value="dueDateValue"
+                      layout="month-and-year"
+                      @update:model-value="handleDueDateSelect"
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">
+                <Label class="mb-1.5 block">
                   <AlertCircle class="w-4 h-4 inline mr-1" />
                   提醒时间
-                </label>
-                <input
+                </Label>
+                <Input
                   v-model="form.reminderTime"
                   type="time"
-                  class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  class="h-10 bg-secondary"
                 />
               </div>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-300 mb-2">标签</label>
+              <Label class="mb-2 block">标签</Label>
               <div class="flex flex-wrap gap-2">
                 <span
                   v-for="tag in form.tags"
                   :key="tag"
-                  class="flex items-center gap-1 px-3 py-1 bg-blue-600/20 text-blue-400 rounded-lg"
+                  class="flex items-center gap-1 rounded-md border border-blue-400/30 bg-blue-500/15 px-2.5 py-1 text-xs text-blue-200"
                 >
                   {{ tag }}
-                  <button @click="removeTag(tag)" class="hover:text-blue-300">
+                  <button @click="removeTag(tag)" class="rounded p-0.5 text-blue-300 hover:bg-blue-400/20 hover:text-blue-100">
                     <X class="w-3 h-3" />
                   </button>
                 </span>
-                <button
+                <Button
                   @click="addTag"
-                  class="px-3 py-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                  variant="outline"
+                  class="rounded-md border border-dashed border-border px-3 py-1 text-sm text-muted-foreground transition-colors hover:border-ring hover:bg-secondary hover:text-foreground"
                 >
                   + 添加标签
-                </button>
+                </Button>
               </div>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-300 mb-1">备注</label>
-              <textarea
+              <Label class="mb-1.5 block">备注</Label>
+              <Textarea
                 v-model="form.notes"
-                class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 rows="3"
                 placeholder="输入备注信息"
+                class="bg-secondary resize-none"
               />
             </div>
           </div>
-          <div class="border-t border-gray-700 p-4 flex items-center justify-end gap-3">
-            <button
+          <div class="flex items-center justify-end gap-3 border-t border-border/80 bg-card/95 px-6 py-4 backdrop-blur">
+            <Button
               @click="closeModal"
-              class="px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+              variant="outline"
             >
               取消
-            </button>
-            <button
+            </Button>
+            <Button
               @click="handleSubmit"
-              class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
             >
               {{ isEditing ? '保存修改' : '创建任务' }}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

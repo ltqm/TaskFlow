@@ -2,21 +2,22 @@ import { Request, Response } from 'express'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import { createUser, getUserByEmail, getUserByUsername, getUserById } from '../database'
+import { fail, ok } from '../utils/response'
 
 export function register(req: Request, res: Response) {
   try {
     const { username, email, password } = req.body
 
     if (!username || !email || !password) {
-      return res.status(400).json({ error: '缺少必要字段' })
+      return fail(res, 400, 10011, '缺少必要字段')
     }
 
     if (getUserByEmail(email)) {
-      return res.status(400).json({ error: '用户已存在' })
+      return fail(res, 400, 10012, '用户已存在')
     }
 
     if (getUserByUsername(username)) {
-      return res.status(400).json({ error: '用户名已被使用' })
+      return fail(res, 400, 10013, '用户名已被使用')
     }
 
     const hashedPassword = bcrypt.hashSync(password, 10)
@@ -44,9 +45,13 @@ export function register(req: Request, res: Response) {
     })
 
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'secret')
-    res.status(201).json({ token, user: { id: user.id, username: user.username, email: user.email } })
+    return res.status(201).json({
+      code: 0,
+      data: { token, user: { id: user.id, username: user.username, email: user.email } },
+      msg: ''
+    })
   } catch (error) {
-    res.status(500).json({ error: '注册失败' })
+    return fail(res, 500, 10099, '注册失败')
   }
 }
 
@@ -55,23 +60,23 @@ export function login(req: Request, res: Response) {
     const { email, password } = req.body
 
     if (!email || !password) {
-      return res.status(400).json({ error: '缺少必要字段' })
+      return fail(res, 400, 10021, '缺少必要字段')
     }
 
     const user = getUserByEmail(email)
     if (!user) {
-      return res.status(401).json({ error: '邮箱或密码错误' })
+      return fail(res, 401, 10022, '邮箱或密码错误')
     }
 
     const isValid = bcrypt.compareSync(password, user.password)
     if (!isValid) {
-      return res.status(401).json({ error: '邮箱或密码错误' })
+      return fail(res, 401, 10022, '邮箱或密码错误')
     }
 
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'secret')
-    res.json({ token, user: { id: user.id, username: user.username, email: user.email } })
+    return ok(res, { token, user: { id: user.id, username: user.username, email: user.email } })
   } catch (error) {
-    res.status(500).json({ error: '登录失败' })
+    return fail(res, 500, 10098, '登录失败')
   }
 }
 
@@ -81,11 +86,11 @@ export function getUser(req: Request, res: Response) {
     const user = getUserById(userId)
     
     if (!user) {
-      return res.status(404).json({ error: '用户不存在' })
+      return fail(res, 404, 10031, '用户不存在')
     }
 
-    res.json({ id: user.id, username: user.username, email: user.email, createdAt: user.createdAt })
+    return ok(res, { id: user.id, username: user.username, email: user.email, createdAt: user.createdAt })
   } catch (error) {
-    res.status(500).json({ error: '获取用户信息失败' })
+    return fail(res, 500, 10097, '获取用户信息失败')
   }
 }

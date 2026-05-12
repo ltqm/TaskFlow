@@ -1,13 +1,14 @@
 import { Request, Response } from 'express'
 import { getVersionsByUserId, getVersionById, createVersion, updateVersion as dbUpdateVersion, deleteVersion as dbDeleteVersion, getTasksByVersionId } from '../database'
+import { fail, ok } from '../utils/response'
 
 export function getAllVersions(req: Request, res: Response) {
   try {
     const userId = (req as any).userId
     const versions = getVersionsByUserId(userId)
-    res.json(versions)
+    return ok(res, versions)
   } catch (error) {
-    res.status(500).json({ error: '获取版本列表失败' })
+    return fail(res, 500, 40099, '获取版本列表失败')
   }
 }
 
@@ -18,13 +19,13 @@ export function getVersionByIdHandler(req: Request, res: Response) {
     
     const version = getVersionById(id, userId)
     if (!version) {
-      return res.status(404).json({ error: '版本不存在' })
+      return fail(res, 404, 40001, '版本不存在')
     }
     
     const tasks = getTasksByVersionId(id, userId)
-    res.json({ ...version, tasks })
+    return ok(res, { ...version, tasks })
   } catch (error) {
-    res.status(500).json({ error: '获取版本详情失败' })
+    return fail(res, 500, 40098, '获取版本详情失败')
   }
 }
 
@@ -34,12 +35,12 @@ export function createVersionHandler(req: Request, res: Response) {
     const { name, description = '', releaseDate } = req.body
 
     if (!name || !releaseDate) {
-      return res.status(400).json({ error: '版本名称和发布日期不能为空' })
+      return fail(res, 400, 40011, '版本名称和发布日期不能为空')
     }
 
     const existingVersion = getVersionsByUserId(userId).find(v => v.name === name)
     if (existingVersion) {
-      return res.status(400).json({ error: '版本已存在' })
+      return fail(res, 400, 40012, '版本已存在')
     }
 
     const version = createVersion({
@@ -50,9 +51,13 @@ export function createVersionHandler(req: Request, res: Response) {
       createdAt: new Date().toISOString()
     })
     
-    res.status(201).json(version)
+    return res.status(201).json({
+      code: 0,
+      data: version,
+      msg: ''
+    })
   } catch (error) {
-    res.status(500).json({ error: '创建版本失败' })
+    return fail(res, 500, 40097, '创建版本失败')
   }
 }
 
@@ -64,7 +69,7 @@ export function updateVersionHandler(req: Request, res: Response) {
 
     const existingVersion = getVersionById(id, userId)
     if (!existingVersion) {
-      return res.status(404).json({ error: '版本不存在' })
+      return fail(res, 404, 40001, '版本不存在')
     }
 
     const updates: Partial<{ name: string; description: string; releaseDate: string }> = {}
@@ -73,17 +78,17 @@ export function updateVersionHandler(req: Request, res: Response) {
     if (releaseDate !== undefined) updates.releaseDate = releaseDate
 
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ error: '没有提供更新字段' })
+      return fail(res, 400, 40013, '没有提供更新字段')
     }
 
     const version = dbUpdateVersion(id, userId, updates)
     if (!version) {
-      return res.status(404).json({ error: '版本不存在' })
+      return fail(res, 404, 40001, '版本不存在')
     }
 
-    res.json(version)
+    return ok(res, version)
   } catch (error) {
-    res.status(500).json({ error: '更新版本失败' })
+    return fail(res, 500, 40096, '更新版本失败')
   }
 }
 
@@ -94,12 +99,12 @@ export function deleteVersionHandler(req: Request, res: Response) {
 
     const success = dbDeleteVersion(id, userId)
     if (!success) {
-      return res.status(404).json({ error: '版本不存在' })
+      return fail(res, 404, 40001, '版本不存在')
     }
 
-    res.json({ message: '版本已删除' })
+    return ok(res, null, '版本已删除')
   } catch (error) {
-    res.status(500).json({ error: '删除版本失败' })
+    return fail(res, 500, 40095, '删除版本失败')
   }
 }
 
@@ -110,12 +115,12 @@ export function getTasksByVersion(req: Request, res: Response) {
 
     const version = getVersionById(id, userId)
     if (!version) {
-      return res.status(404).json({ error: '版本不存在' })
+      return fail(res, 404, 40001, '版本不存在')
     }
 
     const tasks = getTasksByVersionId(id, userId)
-    res.json(tasks)
+    return ok(res, tasks)
   } catch (error) {
-    res.status(500).json({ error: '获取版本任务失败' })
+    return fail(res, 500, 40094, '获取版本任务失败')
   }
 }

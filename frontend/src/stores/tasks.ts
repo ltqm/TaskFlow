@@ -84,9 +84,9 @@ export const useTasksStore = defineStore('tasks', () => {
     }
   }
 
-  async function addSubTask(taskId: string, title: string, description?: string) {
+  async function addSubTask(taskId: string, title: string, description?: string): Promise<SubTask> {
     try {
-      await createSubTaskApi(taskId, title, description)
+      return await createSubTaskApi(taskId, title, description)
     } catch (error) {
       console.error('Failed to create sub task:', error)
       throw error
