@@ -3,10 +3,13 @@ import { ref, computed, watch, onMounted } from 'vue'
 import type { DateValue } from '@internationalized/date'
 import { getLocalTimeZone, parseDate } from '@internationalized/date'
 import { useTasksStore } from '@/stores/tasks'
+import { useVersionsStore } from '@/stores/versions'
 import TaskCard from '@/components/TaskCard.vue'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
+import TaskImportModal from '@/components/task-import/TaskImportModal.vue'
 import { Plus, Search, Filter, X, Tag, Clock, AlertCircle, Calendar as CalendarIcon } from 'lucide-vue-next'
 import type { Task } from '@/types'
+import type { TaskImportCommitResult } from '@/services/api'
 import { toast } from 'vue-sonner'
 import Button from '@/components/ui/button/Button.vue'
 import Calendar from '@/components/ui/calendar/Calendar.vue'
@@ -18,9 +21,11 @@ import Textarea from '@/components/ui/textarea/Textarea.vue'
 import Label from '@/components/ui/label/Label.vue'
 
 const tasksStore = useTasksStore()
+const versionsStore = useVersionsStore()
 
 const showModal = ref(false)
 const showDetailModal = ref(false)
+const showImportModal = ref(false)
 const isEditing = ref(false)
 const searchQuery = ref('')
 const dueDateOpen = ref(false)
@@ -98,6 +103,8 @@ const priorityOptions = [
   { value: 'low', label: '低优先级' }
 ]
 
+const versionOptions = computed(() => versionsStore.versions)
+
 watch(showModal, (newVal) => {
   if (!newVal) {
     resetForm()
@@ -140,6 +147,18 @@ function closeDetailModal() {
   viewingTask.value = null
 }
 
+function onViewingTaskUpdated(task: Task) {
+  viewingTask.value = task
+}
+
+function openImportModal() {
+  showImportModal.value = true
+}
+
+function closeImportModal() {
+  showImportModal.value = false
+}
+
 function editTask(task: Task) {
   if (showDetailModal.value) {
     closeDetailModal()
@@ -166,6 +185,11 @@ async function handleSubmit() {
   try {
     if (!form.value.title.trim()) {
       toast.error('请输入任务标题')
+      return
+    }
+
+    if (!isEditing.value && !form.value.versionId) {
+      toast.error('新增任务必须选择关联版本')
       return
     }
 
@@ -220,9 +244,17 @@ function handleDueDateSelect(value: DateValue | undefined) {
   dueDateOpen.value = false
 }
 
+async function handleImportSuccess(result: TaskImportCommitResult) {
+  await tasksStore.fetchTasks()
+  toast.success(`已导入 ${result.createdTaskCount} 条任务，子任务 ${result.createdSubtaskCount} 条`)
+}
+
 onMounted(async () => {
   if (!tasksStore.categories.length) {
     await tasksStore.fetchCategories()
+  }
+  if (!versionsStore.versions.length) {
+    await versionsStore.fetchVersions()
   }
 })
 </script>
@@ -234,13 +266,22 @@ onMounted(async () => {
         <h1 class="text-3xl font-bold tracking-tight text-foreground">任务管理</h1>
         <p class="mt-1 text-muted-foreground">管理你的日常任务和待办事项</p>
       </div>
-      <Button
-        @click="openModal"
-        class="h-10 rounded-lg"
-      >
-        <Plus class="w-5 h-5" />
-        新建任务
-      </Button>
+      <div class="flex items-center gap-2">
+        <Button
+          variant="outline"
+          class="h-10 rounded-lg"
+          @click="openImportModal"
+        >
+          批量导入
+        </Button>
+        <Button
+          @click="openModal"
+          class="h-10 rounded-lg"
+        >
+          <Plus class="w-5 h-5" />
+          新建任务
+        </Button>
+      </div>
     </div>
 
     <div class="mb-6 rounded-xl border border-border/80 bg-card p-4">
@@ -338,6 +379,20 @@ onMounted(async () => {
                 </select>
               </div>
               <div>
+                <Label class="mb-1.5 block">关联版本 <span class="text-red-400">*</span></Label>
+                <select
+                  v-model="form.versionId"
+                  class="h-10 w-full rounded-md border border-input bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option :value="null">请选择版本</option>
+                  <option v-for="version in versionOptions" :key="version.id" :value="version.id">
+                    {{ version.name }}
+                  </option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
                 <Label class="mb-1.5 block">优先级</Label>
                 <select
                   v-model="form.priority"
@@ -348,6 +403,7 @@ onMounted(async () => {
                   <option value="low">低优先级</option>
                 </select>
               </div>
+              <div />
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
@@ -444,6 +500,13 @@ onMounted(async () => {
       :show="showDetailModal"
       @close="closeDetailModal"
       @edit="editTask"
+      @task-updated="onViewingTaskUpdated"
+    />
+
+    <TaskImportModal
+      :show="showImportModal"
+      @close="closeImportModal"
+      @imported="handleImportSuccess"
     />
   </div>
 </template>

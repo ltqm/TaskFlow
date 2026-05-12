@@ -8,13 +8,17 @@ import { toast } from 'vue-sonner'
 import Button from '@/components/ui/button/Button.vue'
 import Badge from '@/components/ui/badge/Badge.vue'
 
-defineProps<{
+const props = withDefaults(defineProps<{
   task: Task
-}>()
+  allowManage?: boolean
+}>(), {
+  allowManage: true
+})
 
 const emit = defineEmits<{
   edit: [task: Task]
   view: [task: Task]
+  toggleComplete: [task: Task, isCompleted: boolean]
 }>()
 
 const tasksStore = useTasksStore()
@@ -34,7 +38,9 @@ const priorityLabels = {
 }
 
 async function toggleComplete(task: Task) {
-  await tasksStore.updateTaskById(task.id, { isCompleted: !task.isCompleted })
+  const nextCompleted = !task.isCompleted
+  await tasksStore.updateTaskById(task.id, { isCompleted: nextCompleted })
+  emit('toggleComplete', task, nextCompleted)
 }
 
 async function deleteTask(task: Task) {
@@ -146,7 +152,10 @@ function getTruncatedNotes(notes: string, maxLength: number = 50) {
         </div>
       </div>
 
-      <div class="flex items-center gap-1 opacity-0 hover:opacity-100 transition-opacity flex-shrink-0">
+      <div
+        v-if="props.allowManage"
+        class="flex items-center gap-1 opacity-0 hover:opacity-100 transition-opacity flex-shrink-0"
+      >
         <Button
           @click.stop="emit('edit', task)"
           variant="ghost"

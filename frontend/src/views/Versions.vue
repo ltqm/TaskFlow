@@ -3,12 +3,13 @@ import { computed, ref, onMounted } from 'vue'
 import type { DateValue } from '@internationalized/date'
 import { getLocalTimeZone, parseDate } from '@internationalized/date'
 import { useVersionsStore } from '@/stores/versions'
-import { useTasksStore } from '@/stores/tasks'
 import { Plus, Search, X, Calendar as CalendarIcon, FileText, Trash2, Edit3, ChevronRight } from 'lucide-vue-next'
 import type { Version, Task } from '@/types'
 import { useConfirm } from '@/composables/useConfirm'
 import { toast } from 'vue-sonner'
 import Button from '@/components/ui/button/Button.vue'
+import TaskCard from '@/components/TaskCard.vue'
+import TaskDetailModal from '@/components/TaskDetailModal.vue'
 import Input from '@/components/ui/input/Input.vue'
 import Textarea from '@/components/ui/textarea/Textarea.vue'
 import Label from '@/components/ui/label/Label.vue'
@@ -18,11 +19,11 @@ import PopoverContent from '@/components/ui/popover/PopoverContent.vue'
 import PopoverTrigger from '@/components/ui/popover/PopoverTrigger.vue'
 
 const versionsStore = useVersionsStore()
-const tasksStore = useTasksStore()
 const { confirm } = useConfirm()
 
 const showModal = ref(false)
 const isEditing = ref(false)
+const showTaskDetailModal = ref(false)
 const searchQuery = ref('')
 const releaseDateOpen = ref(false)
 
@@ -33,6 +34,7 @@ const form = ref({
 })
 
 const editingVersion = ref<Version | null>(null)
+const viewingTask = ref<Task | null>(null)
 
 const releaseDateValue = computed<DateValue | undefined>(() => {
   if (!form.value.releaseDate) return undefined
@@ -129,14 +131,35 @@ async function deleteVersion(version: Version) {
   }
 }
 
-async function toggleComplete(task: Task) {
-  await tasksStore.updateTaskById(task.id, { isCompleted: !task.isCompleted })
-  if (versionsStore.selectedVersion) {
-    const index = versionsStore.versionTasks.findIndex(t => t.id === task.id)
-    if (index !== -1) {
-      versionsStore.versionTasks[index] = { ...versionsStore.versionTasks[index], isCompleted: !versionsStore.versionTasks[index].isCompleted }
-    }
+function openTaskDetail(task: Task) {
+  viewingTask.value = task
+  showTaskDetailModal.value = true
+}
+
+function closeTaskDetail() {
+  showTaskDetailModal.value = false
+  viewingTask.value = null
+}
+
+function onViewingTaskUpdated(task: Task) {
+  viewingTask.value = task
+}
+
+async function syncVersionTasksBySelection() {
+  if (!versionsStore.selectedVersion) return
+  await versionsStore.selectVersion(versionsStore.selectedVersion)
+}
+
+async function handleTaskToggleComplete(_task: Task, isCompleted: boolean) {
+  if (!viewingTask.value) {
+    await syncVersionTasksBySelection()
+    return
   }
+  viewingTask.value = {
+    ...viewingTask.value,
+    isCompleted
+  }
+  await syncVersionTasksBySelection()
 }
 </script>
 
@@ -239,41 +262,14 @@ async function toggleComplete(task: Task) {
             </div>
 
             <div class="space-y-3 max-h-[calc(100vh-380px)] overflow-y-auto">
-              <div v-for="task in versionsStore.versionTasks" :key="task.id"
-                class="rounded-xl border border-border/80 bg-secondary/45 p-4"
-                :class="{ 'opacity-60': task.isCompleted }">
-                <div class="flex items-start gap-3">
-                  <button @click="toggleComplete(task)" class="mt-1 transition-colors"
-                    :class="task.isCompleted ? 'text-green-500' : 'text-muted-foreground hover:text-foreground'">
-                    <svg v-if="task.isCompleted" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                    <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10"></circle>
-                    </svg>
-                  </button>
-
-                  <div class="flex-1">
-                    <h4
-                      :class="task.isCompleted ? 'text-muted-foreground line-through' : 'font-medium text-foreground'">
-                      {{ task.title }}
-                    </h4>
-                    <p v-if="task.description" class="mt-1 text-sm text-muted-foreground">{{ task.description }}</p>
-                    <div class="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
-                      <span v-if="task.priority" :class="{
-                        'text-red-400': task.priority === 'high',
-                        'text-yellow-400': task.priority === 'medium',
-                        'text-green-400': task.priority === 'low'
-                      }">
-                        {{ task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低' }}优先级
-                      </span>
-                      <span v-if="task.dueDate">
-                        截止: {{ new Date(task.dueDate).toLocaleDateString('zh-CN') }}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <TaskCard
+                v-for="task in versionsStore.versionTasks"
+                :key="task.id"
+                :task="task"
+                :allow-manage="false"
+                @view="openTaskDetail"
+                @toggle-complete="handleTaskToggleComplete"
+              />
 
               <div v-if="versionsStore.versionTasks.length === 0" class="text-center py-12">
                 <FileText class="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
@@ -347,5 +343,14 @@ async function toggleComplete(task: Task) {
         </div>
       </div>
     </Teleport>
+
+    <TaskDetailModal
+      v-if="viewingTask"
+      :task="viewingTask"
+      :show="showTaskDetailModal"
+      :allow-manage="false"
+      @close="closeTaskDetail"
+      @task-updated="onViewingTaskUpdated"
+    />
   </div>
 </template>

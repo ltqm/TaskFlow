@@ -72,6 +72,16 @@ export function createTaskHandler(req: Request, res: Response) {
       return fail(res, 400, 20011, '任务标题不能为空')
     }
 
+    if (!versionId) {
+      return fail(res, 400, 20012, '新增任务必须关联版本')
+    }
+
+    const versions = getVersionsByUserId(userId)
+    const targetVersion = versions.find(v => v.id === versionId)
+    if (!targetVersion) {
+      return fail(res, 400, 20013, '关联版本不存在或无权限')
+    }
+
     const task = createTask({
       title,
       description,
@@ -90,7 +100,6 @@ export function createTaskHandler(req: Request, res: Response) {
     })
 
     const categories = getCategoriesByUserId(userId)
-    const versions = getVersionsByUserId(userId)
     const category = categories.find(c => c.id === task.categoryId)
     const version = versions.find(v => v.id === task.versionId)
 

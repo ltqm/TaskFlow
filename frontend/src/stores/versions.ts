@@ -76,6 +76,14 @@ export const useVersionsStore = defineStore('versions', () => {
     versionTasks.value = []
   }
 
+  /** 用最新任务对象替换当前版本任务列表中的对应项（保持详情与列表一致） */
+  function mergeTaskIntoVersionList(task: Task) {
+    const index = versionTasks.value.findIndex(t => t.id === task.id)
+    if (index !== -1) {
+      versionTasks.value[index] = task
+    }
+  }
+
   const pendingVersionTasks = computed(() => versionTasks.value.filter(t => !t.isCompleted))
   const completedVersionTasks = computed(() => versionTasks.value.filter(t => t.isCompleted))
 
@@ -91,6 +99,7 @@ export const useVersionsStore = defineStore('versions', () => {
     updateVersionById,
     deleteVersionById,
     selectVersion,
-    clearSelection
+    clearSelection,
+    mergeTaskIntoVersionList
   }
 })

@@ -247,6 +247,7 @@ export function createSubTask(subTask: Omit<SubTask, 'id' | 'createdAt' | 'updat
     updatedAt: now
   }
   db.subTasks.push(newSubTask)
+  syncTaskCompletedWithSubTasks(newSubTask.taskId)
   saveDatabase()
   return newSubTask
 }
@@ -255,6 +256,21 @@ export function getSubTasksByTaskId(taskId: string): SubTask[] {
   return db.subTasks.filter(st => st.taskId === taskId).sort((a, b) => 
     new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   )
+}
+
+/** 根据子任务完成情况同步主任务完成状态（有子任务时：全部完成则主任务完成，否则未完成） */
+function syncTaskCompletedWithSubTasks(taskId: string) {
+  const taskIndex = db.tasks.findIndex(t => t.id === taskId)
+  if (taskIndex === -1) return
+
+  const subTasks = getSubTasksByTaskId(taskId)
+  if (subTasks.length === 0) return
+
+  const allDone = subTasks.every(st => st.isCompleted)
+  const task = db.tasks[taskIndex]
+  if (task.isCompleted === allDone) return
+
+  db.tasks[taskIndex] = { ...task, isCompleted: allDone }
 }
 
 export function getSubTaskById(id: string): SubTask | undefined {
@@ -275,19 +291,9 @@ export function updateSubTask(id: string, updates: Partial<SubTask>): SubTask | 
   }
   
   if (updates.isCompleted !== undefined) {
-    const task = getTaskById(taskId, db.tasks.find(t => t.id === taskId)?.userId || '')
-    if (task) {
-      const subTasks = getSubTasksByTaskId(taskId)
-      const allCompleted = subTasks.every(st => st.isCompleted)
-      if (allCompleted && !task.isCompleted) {
-        const taskIndex = db.tasks.findIndex(t => t.id === taskId)
-        if (taskIndex !== -1) {
-          db.tasks[taskIndex] = { ...db.tasks[taskIndex], isCompleted: true }
-        }
-      }
-    }
+    syncTaskCompletedWithSubTasks(taskId)
   }
-  
+
   saveDatabase()
   return db.subTasks[index]
 }
@@ -295,7 +301,9 @@ export function updateSubTask(id: string, updates: Partial<SubTask>): SubTask | 
 export function deleteSubTask(id: string): boolean {
   const index = db.subTasks.findIndex(st => st.id === id)
   if (index === -1) return false
+  const taskId = db.subTasks[index].taskId
   db.subTasks.splice(index, 1)
+  syncTaskCompletedWithSubTasks(taskId)
   saveDatabase()
   return true
 }

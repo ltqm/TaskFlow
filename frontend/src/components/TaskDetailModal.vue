@@ -2,6 +2,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import type { Task, SubTask } from '@/types'
 import { useTasksStore } from '@/stores/tasks'
+import { useVersionsStore } from '@/stores/versions'
 import {
   X,
   CheckCircle,
@@ -22,17 +23,22 @@ import Button from '@/components/ui/button/Button.vue'
 import Input from '@/components/ui/input/Input.vue'
 import Badge from '@/components/ui/badge/Badge.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   task: Task
   show: boolean
-}>()
+  allowManage?: boolean
+}>(), {
+  allowManage: true
+})
 
 const emit = defineEmits<{
   close: []
   edit: [task: Task]
+  taskUpdated: [task: Task]
 }>()
 
 const tasksStore = useTasksStore()
+const versionsStore = useVersionsStore()
 const { confirm } = useConfirm()
 
 const subTasks = ref<SubTask[]>([])
@@ -89,8 +95,11 @@ async function loadSubTasks() {
   }
 }
 
-async function toggleComplete(task: Task) {
-  await tasksStore.updateTaskById(task.id, { isCompleted: !task.isCompleted })
+async function syncParentTaskFromServer() {
+  const fresh = await tasksStore.refreshTaskById(props.task.id)
+  if (!fresh) return
+  versionsStore.mergeTaskIntoVersionList(fresh)
+  emit('taskUpdated', fresh)
 }
 
 async function deleteTask(task: Task) {
@@ -109,6 +118,7 @@ async function deleteTask(task: Task) {
 async function toggleSubTaskComplete(subTask: SubTask) {
   await tasksStore.updateSubTask(subTask.id, { isCompleted: !subTask.isCompleted })
   await loadSubTasks()
+  await syncParentTaskFromServer()
 }
 
 async function addSubTask() {
@@ -134,6 +144,8 @@ async function addSubTask() {
       }
     }
 
+    await syncParentTaskFromServer()
+
     toast.success('子任务添加成功')
   } catch (error) {
     const message = (error as { message?: string; response?: { data?: { msg?: string } } })?.message
@@ -154,6 +166,7 @@ async function deleteSubTask(subTask: SubTask) {
     await tasksStore.deleteSubTask(subTask.id)
     toast.success('子任务已删除')
     await loadSubTasks()
+    await syncParentTaskFromServer()
   }
 }
 </script>
@@ -175,28 +188,28 @@ async function deleteSubTask(subTask: SubTask) {
         </div>
 
         <div class="space-y-6 p-6">
-          <div class="flex items-start gap-4">
-            <button @click="toggleComplete(task)" class="mt-1 transition-colors"
-              :class="task.isCompleted ? 'text-green-500' : 'text-muted-foreground hover:text-foreground'">
-              <CheckCircle v-if="task.isCompleted" class="w-8 h-8" />
-              <Circle v-else class="w-8 h-8" />
-            </button>
-            <div class="flex-1">
-              <div class="flex items-center gap-3 mb-2">
-                <h3 class="text-2xl font-bold"
-                  :class="task.isCompleted ? 'text-muted-foreground line-through' : 'text-foreground'">
-                  {{ task.title }}
-                </h3>
-                <Badge v-if="task.priority" class="rounded-full px-3 py-1 text-xs text-white border-transparent"
-                  :class="priorityColors[task.priority]">
-                  {{ priorityLabels[task.priority] }}
-                </Badge>
-              </div>
-              <span class="rounded-full px-3 py-1 text-xs font-medium"
-                :class="task.isCompleted ? 'bg-green-500/20 text-green-300 ring-1 ring-green-400/30' : 'bg-secondary text-foreground/85 ring-1 ring-border'">
-                {{ task.isCompleted ? '已完成' : '待处理' }}
-              </span>
+          <div>
+            <div class="mb-2 flex flex-wrap items-center gap-3">
+              <h3
+                class="text-2xl font-bold"
+                :class="task.isCompleted ? 'text-muted-foreground line-through' : 'text-foreground'"
+              >
+                {{ task.title }}
+              </h3>
+              <Badge
+                v-if="task.priority"
+                class="rounded-full border-transparent px-3 py-1 text-xs text-white"
+                :class="priorityColors[task.priority]"
+              >
+                {{ priorityLabels[task.priority] }}
+              </Badge>
             </div>
+            <span
+              class="inline-flex rounded-full px-3 py-1 text-xs font-medium"
+              :class="task.isCompleted ? 'bg-green-500/20 text-green-300 ring-1 ring-green-400/30' : 'bg-secondary text-foreground/85 ring-1 ring-border'"
+            >
+              {{ task.isCompleted ? '已完成' : '待处理' }}
+            </span>
           </div>
 
           <div v-if="task.description" class="rounded-lg border border-border/80 bg-secondary/55 p-4">
@@ -266,14 +279,17 @@ async function deleteSubTask(subTask: SubTask) {
                   :class="subTask.isCompleted ? 'text-muted-foreground line-through' : 'text-foreground/85'">
                   {{ subTask.title }}
                 </span>
-                <button @click="deleteSubTask(subTask)"
-                  class="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive">
+                <button
+                  v-if="props.allowManage"
+                  @click="deleteSubTask(subTask)"
+                  class="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
                   <Trash2 class="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            <div v-if="isAddingSubTask" class="mb-4">
+            <div v-if="props.allowManage && isAddingSubTask" class="mb-4">
               <div class="flex items-center gap-2">
                 <Input :id="subTaskInputId" v-model="newSubTaskTitle" type="text" placeholder="输入子任务标题" class="h-10 flex-1 bg-secondary"
                   @keyup.enter="addSubTask" />
@@ -286,7 +302,7 @@ async function deleteSubTask(subTask: SubTask) {
               </div>
             </div>
 
-            <Button v-else @click="isAddingSubTask = true" variant="outline"
+            <Button v-else-if="props.allowManage" @click="isAddingSubTask = true" variant="outline"
               class="flex w-full items-center gap-2 border-dashed text-muted-foreground hover:border-ring hover:bg-secondary hover:text-foreground">
               <Plus class="w-5 h-5" />
               添加子任务
@@ -304,7 +320,9 @@ async function deleteSubTask(subTask: SubTask) {
         </div>
 
         <div
-          class="sticky bottom-0 flex items-center justify-end gap-3 border-t border-border/80 bg-card/95 px-6 py-4 backdrop-blur">
+          v-if="props.allowManage"
+          class="sticky bottom-0 flex items-center justify-end gap-3 border-t border-border/80 bg-card/95 px-6 py-4 backdrop-blur"
+        >
           <Button @click="deleteTask(task)" variant="destructive" class="h-9 bg-destructive/85 hover:bg-destructive">
             删除任务
           </Button>

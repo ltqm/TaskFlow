@@ -57,6 +57,10 @@
 - `categoryColor`: 分类颜色（Hex），可为 `null`。
 - `versionName`: 版本名称（由 `versionId` 关联得到），可为 `null`。
 
+### 新增任务约束（`POST /tasks`）
+
+- `versionId` 必填：新增任务必须绑定一个已存在且属于当前用户的版本。
+
 ## 4) 分类模块字段（`/categories/*`）
 
 - `id`: 分类唯一 ID。
@@ -118,3 +122,69 @@
 - 大多数时间字段采用 ISO 8601 字符串（如 `2026-05-12T06:00:00.000Z`）。
 - `releaseDate` 为日期字符串（不含时间），格式 `YYYY-MM-DD`。
 - ID 在当前实现中多为字符串化时间戳。
+
+## 9) 批量导入任务（`/tasks/import/*`）
+
+### 导入流程（MVP）
+
+- `POST /tasks/import/precheck`：上传 Excel/CSV 文件，仅预检，不写入。
+- `POST /tasks/import/commit`：传入 `importToken + fileHash`，确认导入。
+- 预检通过才会返回 `importToken`；有效期 10 分钟。
+
+### 请求与响应字段
+
+- `precheck` 请求：`multipart/form-data`，字段 `file`。
+- `precheck` 返回 `data`：
+  - `totalRows` / `validRows` / `errorRows` / `warningRows`
+  - `canCommit`
+  - `importToken`（不可提交时为 `null`）
+  - `fileHash`、`expiresAt`
+  - `errors[]`：`rowIndex`、`field`、`reason`
+  - `warnings[]`：`rowIndex`、`field`、`reason`
+  - `normalizedRows[]`：标准化后预览（含 `subTaskCount`）
+- `commit` 请求：JSON，必填 `importToken`、`fileHash`。
+- `commit` 返回 `data`：
+  - `createdTaskCount`
+  - `createdSubtaskCount`
+  - `skippedRelationCount`
+  - `createdTasks[]`（创建成功的任务）
+
+### 错误码（导入相关）
+
+- `20012`：未上传文件。
+- `20013`：文件为空或缺少数据行。
+- `20014`：超过大小/行数限制。
+- `20015`：预检或上传失败（格式异常）。
+- `20017`：导入令牌无效。
+- `20018`：令牌过期、用户不匹配或文件校验失败。
+- `20019`：`commit` 参数缺失。
+
+### 文件限制与默认规则
+
+- 文件类型：`.xlsx` / `.xls` / `.csv`。
+- 文件大小：最大 5MB。
+- 行数限制：单次最多 100 行任务。
+- 必填字段：`title`（任务标题）。
+- `priority` 非 `high|medium|low`：回退为 `medium` 并给出 warning。
+- `totalPomodoros < 1` 或非法：回退为 `1` 并给出 warning。
+- `dueDate/reminderTime` 解析失败：置空并给出 warning。
+- `categoryName/versionName` 无匹配：置空并给出 warning（不阻断导入）。
+- `subTasks` 中空子任务：跳过并给出 warning。
+
+### 导入模板列（首版）
+
+- `title`
+- `description`
+- `priority`
+- `dueDate`
+- `reminderTime`
+- `tags`（支持 `,`、`，`、`|` 分隔）
+- `notes`
+- `totalPomodoros`
+- `categoryName`
+- `versionName`
+- `subTasks`（支持 `|`、`;`、换行分隔；`标题::描述` 可选）
+
+### 模板文件
+
+- 前端静态模板：`frontend/public/task-import-template.csv`

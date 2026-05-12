@@ -168,18 +168,91 @@ const swaggerDefinition: swaggerJSDoc.OAS3Definition = {
       },
       TaskCreateRequest: {
         type: 'object',
-        required: ['title'],
+        required: ['title', 'versionId'],
         properties: {
           title: { type: 'string', description: '任务标题（必填）' },
           description: { type: 'string', description: '任务描述' },
           categoryId: { type: 'string', nullable: true, description: '所属分类 ID' },
-          versionId: { type: 'string', nullable: true, description: '所属版本 ID' },
+          versionId: { type: 'string', description: '所属版本 ID（必填）' },
           priority: { type: 'string', description: '优先级', enum: ['high', 'medium', 'low'] },
           dueDate: { type: 'string', format: 'date-time', nullable: true, description: '截止时间' },
           reminderTime: { type: 'string', format: 'date-time', nullable: true, description: '提醒时间' },
           tags: { type: 'array', description: '标签列表', items: { type: 'string' } },
           notes: { type: 'string', description: '备注信息' },
           totalPomodoros: { type: 'integer', minimum: 1, description: '预估番茄钟总数，最小为 1' }
+        }
+      },
+      TaskImportCommitRequest: {
+        type: 'object',
+        required: ['importToken', 'fileHash'],
+        properties: {
+          importToken: { type: 'string', description: '预检返回的导入令牌，10 分钟有效' },
+          fileHash: { type: 'string', description: '预检返回的 SHA256 文件摘要' }
+        }
+      },
+      TaskImportIssue: {
+        type: 'object',
+        required: ['rowIndex', 'field', 'reason'],
+        properties: {
+          rowIndex: { type: 'integer', description: '问题所在行号（从 2 开始，对应表格行）' },
+          field: { type: 'string', description: '问题字段名' },
+          reason: { type: 'string', description: '问题说明' }
+        }
+      },
+      TaskImportPrecheckRow: {
+        type: 'object',
+        properties: {
+          rowIndex: { type: 'integer' },
+          title: { type: 'string' },
+          description: { type: 'string' },
+          categoryId: { type: 'string', nullable: true },
+          versionId: { type: 'string', nullable: true },
+          priority: { type: 'string', enum: ['high', 'medium', 'low'] },
+          dueDate: { type: 'string', format: 'date-time', nullable: true },
+          reminderTime: { type: 'string', format: 'date-time', nullable: true },
+          tags: { type: 'array', items: { type: 'string' } },
+          notes: { type: 'string' },
+          totalPomodoros: { type: 'integer' },
+          subTaskCount: { type: 'integer' }
+        }
+      },
+      TaskImportPrecheckData: {
+        type: 'object',
+        required: ['totalRows', 'validRows', 'errorRows', 'warningRows', 'canCommit', 'errors', 'warnings', 'normalizedRows'],
+        properties: {
+          totalRows: { type: 'integer' },
+          validRows: { type: 'integer' },
+          errorRows: { type: 'integer' },
+          warningRows: { type: 'integer' },
+          canCommit: { type: 'boolean', description: '是否可直接调用 commit 接口' },
+          importToken: { type: 'string', nullable: true },
+          fileHash: { type: 'string' },
+          expiresAt: { type: 'string', format: 'date-time', nullable: true },
+          errors: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/TaskImportIssue' }
+          },
+          warnings: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/TaskImportIssue' }
+          },
+          normalizedRows: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/TaskImportPrecheckRow' }
+          }
+        }
+      },
+      TaskImportCommitData: {
+        type: 'object',
+        required: ['createdTaskCount', 'createdSubtaskCount', 'skippedRelationCount', 'createdTasks'],
+        properties: {
+          createdTaskCount: { type: 'integer' },
+          createdSubtaskCount: { type: 'integer' },
+          skippedRelationCount: { type: 'integer', description: '分类/版本未匹配置空总次数' },
+          createdTasks: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/Task' }
+          }
         }
       },
       CategoryCreateRequest: {

@@ -1,12 +1,32 @@
-import { Router } from 'express'
+import { NextFunction, Request, Response, Router } from 'express'
+import multer from 'multer'
 import { getAllTasks, getTaskByIdHandler, createTaskHandler, updateTaskHandler, deleteTaskHandler } from '../controllers/tasks'
+import { precheckTaskImportHandler, commitTaskImportHandler } from '../controllers/tasks-import'
 import { getAllCategories, getCategoryByIdHandler, createCategoryHandler, updateCategoryHandler, deleteCategoryHandler } from '../controllers/categories'
 import { getAllVersions, getVersionByIdHandler, createVersionHandler, updateVersionHandler, deleteVersionHandler, getTasksByVersion } from '../controllers/versions'
 import { register, login, getUser } from '../controllers/auth'
 import { createSubTaskHandler, getSubTasksHandler, getSubTaskHandler, updateSubTaskHandler, deleteSubTaskHandler } from '../controllers/subtasks'
 import { authenticateToken } from '../middleware/auth'
+import { fail } from '../utils/response'
 
 const router = Router()
+const uploadImportFile = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024
+  }
+})
+const uploadImportFileMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  uploadImportFile.single('file')(req, res, error => {
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      return fail(res, 400, 20014, '文件过大，最大支持 5MB')
+    }
+    if (error) {
+      return fail(res, 400, 20015, '文件上传失败，请检查文件格式')
+    }
+    return next()
+  })
+}
 
 /**
  * @openapi
@@ -163,6 +183,88 @@ router.get('/auth/user', authenticateToken, getUser)
  */
 router.get('/tasks', authenticateToken, getAllTasks)
 router.post('/tasks', authenticateToken, createTaskHandler)
+
+/**
+ * @openapi
+ * /tasks/import/precheck:
+ *   post:
+ *     tags: [Tasks]
+ *     summary: 批量导入任务预检
+ *     description: 上传 Excel/CSV 进行预检，不写入数据库
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [file]
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: xlsx/xls/csv 文件，最大 5MB，最多 100 行
+ *     responses:
+ *       200:
+ *         description: 预检完成
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiSuccess'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/TaskImportPrecheckData'
+ *       400:
+ *         description: 文件缺失、文件过大、格式非法或超过行数限制
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ *       500:
+ *         $ref: '#/components/responses/InternalError'
+ */
+router.post('/tasks/import/precheck', authenticateToken, uploadImportFileMiddleware, precheckTaskImportHandler)
+
+/**
+ * @openapi
+ * /tasks/import/commit:
+ *   post:
+ *     tags: [Tasks]
+ *     summary: 确认批量导入任务
+ *     description: 使用预检返回的 importToken + fileHash 执行正式导入
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/TaskImportCommitRequest'
+ *     responses:
+ *       200:
+ *         description: 导入成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiSuccess'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/TaskImportCommitData'
+ *       400:
+ *         description: 参数缺失、令牌无效、令牌过期或校验失败
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ *       500:
+ *         $ref: '#/components/responses/InternalError'
+ */
+router.post('/tasks/import/commit', authenticateToken, commitTaskImportHandler)
 
 /**
  * @openapi

@@ -17,6 +17,48 @@ interface ApiEnvelope<T> {
   msg: string
 }
 
+export interface TaskImportIssue {
+  rowIndex: number
+  field: string
+  reason: string
+}
+
+export interface TaskImportPrecheckRow {
+  rowIndex: number
+  title: string
+  description: string
+  categoryId: string | null
+  versionId: string | null
+  priority: 'high' | 'medium' | 'low'
+  dueDate: string | null
+  reminderTime: string | null
+  tags: string[]
+  notes: string
+  totalPomodoros: number
+  subTaskCount: number
+}
+
+export interface TaskImportPrecheckResult {
+  totalRows: number
+  validRows: number
+  errorRows: number
+  warningRows: number
+  canCommit: boolean
+  importToken: string | null
+  fileHash: string
+  expiresAt: string | null
+  errors: TaskImportIssue[]
+  warnings: TaskImportIssue[]
+  normalizedRows: TaskImportPrecheckRow[]
+}
+
+export interface TaskImportCommitResult {
+  createdTaskCount: number
+  createdSubtaskCount: number
+  skippedRelationCount: number
+  createdTasks: Task[]
+}
+
 function isApiEnvelope<T>(payload: unknown): payload is ApiEnvelope<T> {
   if (!payload || typeof payload !== 'object') return false
   return 'code' in payload && 'data' in payload && 'msg' in payload
@@ -158,6 +200,23 @@ export async function updateSubTask(id: string, updates: Partial<SubTask>): Prom
 
 export async function deleteSubTask(id: string): Promise<void> {
   await api.delete(`/subtasks/${id}`)
+}
+
+export async function precheckTaskImport(file: File): Promise<TaskImportPrecheckResult> {
+  const formData = new FormData()
+  formData.append('file', file)
+  return requestData<TaskImportPrecheckResult>(api.post('/tasks/import/precheck', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  }))
+}
+
+export async function commitTaskImport(importToken: string, fileHash: string): Promise<TaskImportCommitResult> {
+  return requestData<TaskImportCommitResult>(api.post('/tasks/import/commit', {
+    importToken,
+    fileHash
+  }))
 }
 
 export default api

@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { Task, Category, SubTask } from '@/types'
 import { 
   getTasks, 
+  getTaskById,
   createTask, 
   updateTask, 
   deleteTask, 
@@ -71,6 +72,21 @@ export const useTasksStore = defineStore('tasks', () => {
     } catch (error) {
       console.error('Failed to update task:', error)
       throw error
+    }
+  }
+
+  /** 从服务端拉取最新任务并合并进列表（用于子任务变更后同步主任务状态等） */
+  async function refreshTaskById(id: string): Promise<Task | null> {
+    try {
+      const task = await getTaskById(id)
+      const index = tasks.value.findIndex(t => t.id === id)
+      if (index !== -1) {
+        tasks.value[index] = task
+      }
+      return task
+    } catch (error) {
+      console.error('Failed to refresh task:', error)
+      return null
     }
   }
 
@@ -154,6 +170,7 @@ export const useTasksStore = defineStore('tasks', () => {
     fetchSubTasks,
     addTask,
     updateTaskById,
+    refreshTaskById,
     deleteTaskById,
     addSubTask,
     updateSubTask,
