@@ -203,6 +203,7 @@ const swaggerDefinition: swaggerJSDoc.OAS3Definition = {
         type: 'object',
         properties: {
           rowIndex: { type: 'integer' },
+          mainTaskTitle: { type: 'string', description: '主任务标题（与 tasks 表 title 一致，用于 subtasks 关联，导入文件内须唯一）' },
           title: { type: 'string' },
           description: { type: 'string' },
           categoryId: { type: 'string', nullable: true },

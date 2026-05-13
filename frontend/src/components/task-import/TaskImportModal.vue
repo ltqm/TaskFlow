@@ -113,13 +113,28 @@ async function confirmImport() {
             <p class="text-sm text-foreground/90">
               支持 <code>.xlsx/.xls/.csv</code>，单次最多 100 行，最大 5MB。
             </p>
-            <a
-              href="/task-import-template.csv"
-              download
-              class="mt-2 inline-block text-sm text-primary hover:underline"
-            >
-              下载模板文件
-            </a>
+            <p class="mt-1 text-xs text-muted-foreground">
+              如需导入子任务，请使用双 Sheet 的 xlsx 模板（<code>tasks</code> + <code>subtasks</code>）；子表「主任务标题」须与主表主任务标题完全一致（模板中子表列为下拉，选项来自主表标题列）。
+            </p>
+            <p class="mt-1 text-xs text-muted-foreground">
+              CSV 仅支持任务主表，不支持子任务导入。
+            </p>
+            <div class="mt-2 flex items-center gap-3 text-sm">
+              <a
+                href="/task-import-template-v2.xlsx"
+                download
+                class="text-primary hover:underline"
+              >
+                下载双 Sheet 模板（xlsx）
+              </a>
+              <a
+                href="/task-import-template.csv"
+                download
+                class="text-primary/90 hover:underline"
+              >
+                下载主表模板（csv）
+              </a>
+            </div>
           </div>
 
           <div class="rounded-lg border border-border/80 bg-card p-4">

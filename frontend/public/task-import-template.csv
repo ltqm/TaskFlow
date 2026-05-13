@@ -1,3 +1,2 @@
-title,description,priority,dueDate,reminderTime,tags,notes,totalPomodoros,categoryName,versionName,subTasks
-Sprint planning,Prepare planning checklist,high,2026-05-20T09:00:00Z,2026-05-19T18:00:00Z,planning,Bring roadmap,3,Work,Release-1.0,"整理需求::确认范围|准备议程::同步风险"
-Write API doc,Update import API docs,medium,,,backend|docs,,2,Work,Release-1.0,"补充参数说明|补充错误码"
+﻿主任务标题,任务描述,优先级,截止时间,提醒时间,标签,备注,预估番茄钟,分类,版本
+示例任务,说明文字,medium,,,标签1,,2,,

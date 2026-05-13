@@ -1,7 +1,13 @@
-import crypto from 'crypto'
+﻿import crypto from 'crypto'
 import { Request, Response } from 'express'
 import * as XLSX from 'xlsx'
-import { createSubTask, createTask, getCategoriesByUserId, getVersionsByUserId } from '../database'
+import {
+  createSubTask,
+  createTask,
+  createVersion,
+  getCategoriesByUserId,
+  getVersionsByUserId
+} from '../database'
 import { fail, ok } from '../utils/response'
 
 const MAX_IMPORT_ROWS = 100
@@ -49,9 +55,12 @@ interface ImportSession {
 
 const importSessions = new Map<string, ImportSession>()
 
-const HEADER_ALIASES: Record<string, string> = {
+const TASK_HEADER_ALIASES: Record<string, string> = {
+  taskRef: 'taskRef',
+  '任务引用': 'taskRef',
   title: 'title',
   '任务标题': 'title',
+  '主任务标题': 'title',
   description: 'description',
   '任务描述': 'description',
   priority: 'priority',
@@ -72,6 +81,16 @@ const HEADER_ALIASES: Record<string, string> = {
   '版本': 'versionName',
   subTasks: 'subTasks',
   '子任务': 'subTasks'
+}
+
+const SUBTASK_HEADER_ALIASES: Record<string, string> = {
+  parentTitle: 'parentTitle',
+  '主任务标题': 'parentTitle',
+  '所属主任务': 'parentTitle',
+  title: 'title',
+  '子任务标题': 'title',
+  description: 'description',
+  '子任务描述': 'description'
 }
 
 function normalizeHeader(input: string) {
@@ -147,46 +166,6 @@ function normalizeTags(value: string) {
     .filter(Boolean)
 }
 
-function normalizeSubTasks(value: string, rowIndex: number, warnings: ImportIssue[]) {
-  if (!value) {
-    return [] as NormalizedSubTaskInput[]
-  }
-
-  const pieces = value
-    .split(/[\n|；;]+/)
-    .map(piece => piece.trim())
-
-  const normalized: NormalizedSubTaskInput[] = []
-  pieces.forEach((piece, index) => {
-    if (!piece) {
-      warnings.push({
-        rowIndex,
-        field: 'subTasks',
-        reason: `第 ${index + 1} 个子任务为空，已跳过`
-      })
-      return
-    }
-
-    const [titleRaw, ...descriptionParts] = piece.split('::')
-    const title = titleRaw.trim()
-    if (!title) {
-      warnings.push({
-        rowIndex,
-        field: 'subTasks',
-        reason: `第 ${index + 1} 个子任务标题为空，已跳过`
-      })
-      return
-    }
-
-    normalized.push({
-      title,
-      description: descriptionParts.join('::').trim()
-    })
-  })
-
-  return normalized
-}
-
 function cleanupExpiredSessions() {
   const now = Date.now()
   for (const [token, session] of importSessions.entries()) {
@@ -196,66 +175,120 @@ function cleanupExpiredSessions() {
   }
 }
 
-function getRawRowsFromFile(fileBuffer: Buffer) {
-  const workbook = XLSX.read(fileBuffer, { type: 'buffer' })
-  const firstSheetName = workbook.SheetNames[0]
-  if (!firstSheetName) {
-    return [] as Record<string, unknown>[]
-  }
-  const sheet = workbook.Sheets[firstSheetName]
-  return XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-    defval: ''
-  })
+function getWorkbook(fileBuffer: Buffer) {
+  return XLSX.read(fileBuffer, { type: 'buffer' })
 }
 
-function normalizeRows(rawRows: Record<string, unknown>[], userId: string) {
+function getSheetRows(workbook: XLSX.WorkBook, sheetName: string) {
+  const sheet = workbook.Sheets[sheetName]
+  if (!sheet) return [] as Record<string, unknown>[]
+  return XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
+}
+
+function canonicalizeRow(raw: Record<string, unknown>, aliases: Record<string, string>) {
+  const canonicalRow: Record<string, string> = {}
+  Object.entries(raw).forEach(([header, value]) => {
+    const canonical = aliases[normalizeHeader(header)]
+    if (canonical) {
+      canonicalRow[canonical] = toStringValue(value)
+    }
+  })
+  return canonicalRow
+}
+
+function isRowEmpty(row: Record<string, string>) {
+  return Object.values(row).every(v => !v)
+}
+
+function normalizeRowsFromWorkbook(workbook: XLSX.WorkBook, userId: string, filename: string) {
   const errors: ImportIssue[] = []
   const warnings: ImportIssue[] = []
   const categories = getCategoriesByUserId(userId)
   const versions = getVersionsByUserId(userId)
   const categoryMap = new Map(categories.map(category => [category.name.trim().toLowerCase(), category]))
   const versionMap = new Map(versions.map(version => [version.name.trim().toLowerCase(), version]))
+
+  const lowerName = filename.toLowerCase()
+  const isCsv = lowerName.endsWith('.csv')
+
+  let tasksRaw: Record<string, unknown>[] = []
+  let subtasksRaw: Record<string, unknown>[] = []
+
+  if (isCsv) {
+    const firstSheetName = workbook.SheetNames[0]
+    if (!firstSheetName) {
+      return { errors, warnings, normalizedRows: [] as NormalizedImportRow[] }
+    }
+    tasksRaw = getSheetRows(workbook, firstSheetName)
+    warnings.push({ rowIndex: 1, field: 'file', reason: 'CSV 仅支持 tasks 主表，子任务不会被导入' })
+  } else {
+    const hasTasks = workbook.SheetNames.includes('tasks')
+    const hasSubtasks = workbook.SheetNames.includes('subtasks')
+    if (!hasTasks || !hasSubtasks) {
+      errors.push({ rowIndex: 1, field: 'sheet', reason: 'xlsx/xls 文件必须包含 tasks 与 subtasks 两个工作表' })
+      return { errors, warnings, normalizedRows: [] as NormalizedImportRow[] }
+    }
+    tasksRaw = getSheetRows(workbook, 'tasks')
+    subtasksRaw = getSheetRows(workbook, 'subtasks')
+  }
+
   const normalizedRows: NormalizedImportRow[] = []
+  const taskTitleSet = new Set<string>()
+  const subtaskMap = new Map<string, NormalizedSubTaskInput[]>()
 
-  rawRows.forEach((rawRow, index) => {
+  tasksRaw.forEach((rawRow, index) => {
     const rowIndex = index + 2
-    const canonicalRow: Record<string, string> = {}
+    const row = canonicalizeRow(rawRow, TASK_HEADER_ALIASES)
 
-    Object.entries(rawRow).forEach(([header, value]) => {
-      const normalizedHeader = normalizeHeader(header)
-      const canonical = HEADER_ALIASES[normalizedHeader]
-      if (canonical) {
-        canonicalRow[canonical] = toStringValue(value)
-      }
-    })
+    if (isRowEmpty(row)) return
 
-    const title = (canonicalRow.title || '').trim()
-    if (!title) {
-      errors.push({
+    if (row.subTasks) {
+      errors.push({ rowIndex, field: 'subTasks', reason: '旧 subTasks 拼接格式已废弃，请使用 subtasks 工作表' })
+    }
+
+    const title = (row.title || '').trim()
+
+    if ((row.taskRef || '').trim()) {
+      warnings.push({
         rowIndex,
-        field: 'title',
-        reason: '任务标题不能为空'
+        field: 'taskRef',
+        reason: '已忽略 taskRef/任务引用 列：子任务请通过「主任务标题」与 tasks 表关联'
       })
+    }
+
+    if (!title) {
+      errors.push({ rowIndex, field: 'title', reason: '主任务标题不能为空' })
       return
     }
 
-    const categoryName = (canonicalRow.categoryName || '').trim()
-    const versionName = (canonicalRow.versionName || '').trim()
+    if (taskTitleSet.has(title)) {
+      errors.push({ rowIndex, field: 'title', reason: `主任务标题 "${title}" 在本文件中重复，子任务无法唯一定位` })
+      return
+    }
+    taskTitleSet.add(title)
+
+    const categoryName = (row.categoryName || '').trim()
+    const versionName = (row.versionName || '').trim()
     const category = categoryName ? categoryMap.get(categoryName.toLowerCase()) : undefined
-    const version = versionName ? versionMap.get(versionName.toLowerCase()) : undefined
+    let version = versionName ? versionMap.get(versionName.toLowerCase()) : undefined
 
     if (categoryName && !category) {
-      warnings.push({
-        rowIndex,
-        field: 'categoryName',
-        reason: `分类 "${categoryName}" 不存在，已置空`
-      })
+      warnings.push({ rowIndex, field: 'categoryName', reason: `分类 "${categoryName}" 不存在，已置空` })
     }
     if (versionName && !version) {
+      const created = createVersion({
+        name: versionName,
+        description: '',
+        releaseDate: new Date().toISOString().slice(0, 10),
+        userId,
+        createdAt: new Date().toISOString()
+      })
+      versionMap.set(created.name.trim().toLowerCase(), created)
+      version = created
       warnings.push({
         rowIndex,
         field: 'versionName',
-        reason: `版本 "${versionName}" 不存在，已置空`
+        reason: `版本 "${versionName}" 不存在，已自动创建并关联`
       })
     }
 
@@ -263,18 +296,51 @@ function normalizeRows(rawRows: Record<string, unknown>[], userId: string) {
       rowIndex,
       task: {
         title,
-        description: canonicalRow.description || '',
+        description: row.description || '',
         categoryId: category?.id || null,
         versionId: version?.id || null,
-        priority: normalizePriority(canonicalRow.priority || '', rowIndex, warnings),
-        dueDate: normalizeIsoDateTime(canonicalRow.dueDate || '', rowIndex, 'dueDate', warnings),
-        reminderTime: normalizeIsoDateTime(canonicalRow.reminderTime || '', rowIndex, 'reminderTime', warnings),
-        tags: normalizeTags(canonicalRow.tags || ''),
-        notes: canonicalRow.notes || '',
-        totalPomodoros: normalizePositiveInteger(canonicalRow.totalPomodoros || '', rowIndex, warnings)
+        priority: normalizePriority(row.priority || '', rowIndex, warnings),
+        dueDate: normalizeIsoDateTime(row.dueDate || '', rowIndex, 'dueDate', warnings),
+        reminderTime: normalizeIsoDateTime(row.reminderTime || '', rowIndex, 'reminderTime', warnings),
+        tags: normalizeTags(row.tags || ''),
+        notes: row.notes || '',
+        totalPomodoros: normalizePositiveInteger(row.totalPomodoros || '', rowIndex, warnings)
       },
-      subTasks: normalizeSubTasks(canonicalRow.subTasks || '', rowIndex, warnings)
+      subTasks: []
     })
+  })
+
+  subtasksRaw.forEach((rawRow, index) => {
+    const rowIndex = index + 2
+    const row = canonicalizeRow(rawRow, SUBTASK_HEADER_ALIASES)
+
+    if (isRowEmpty(row)) return
+
+    const parentTitle = (row.parentTitle || '').trim()
+    const title = (row.title || '').trim()
+
+    if (!parentTitle) {
+      errors.push({ rowIndex, field: 'subtasks.parentTitle', reason: '主任务标题不能为空（须与 tasks 表中某一行主任务标题完全一致）' })
+      return
+    }
+
+    if (!taskTitleSet.has(parentTitle)) {
+      errors.push({ rowIndex, field: 'subtasks.parentTitle', reason: `未找到主任务：${parentTitle}` })
+      return
+    }
+
+    if (!title) {
+      errors.push({ rowIndex, field: 'subtasks.title', reason: '子任务标题不能为空' })
+      return
+    }
+
+    const list = subtaskMap.get(parentTitle) || []
+    list.push({ title, description: row.description || '' })
+    subtaskMap.set(parentTitle, list)
+  })
+
+  normalizedRows.forEach(row => {
+    row.subTasks = subtaskMap.get(row.task.title) || []
   })
 
   return { errors, warnings, normalizedRows }
@@ -295,16 +361,17 @@ export function precheckTaskImportHandler(req: Request, res: Response) {
       return fail(res, 400, 20014, '文件过大，最大支持 5MB')
     }
 
-    const rows = getRawRowsFromFile(file.buffer)
-    if (!rows.length) {
+    const workbook = getWorkbook(file.buffer)
+    const { errors, warnings, normalizedRows } = normalizeRowsFromWorkbook(workbook, userId, file.originalname)
+
+    if (!normalizedRows.length && errors.length === 0) {
       return fail(res, 400, 20013, '导入文件为空或缺少数据行')
     }
 
-    if (rows.length > MAX_IMPORT_ROWS) {
+    if (normalizedRows.length > MAX_IMPORT_ROWS) {
       return fail(res, 400, 20014, `单次最多导入 ${MAX_IMPORT_ROWS} 行任务`)
     }
 
-    const { errors, warnings, normalizedRows } = normalizeRows(rows, userId)
     const canCommit = errors.length === 0
     let importToken: string | null = null
     const fileHash = crypto.createHash('sha256').update(file.buffer).digest('hex')
@@ -320,7 +387,7 @@ export function precheckTaskImportHandler(req: Request, res: Response) {
     }
 
     return ok(res, {
-      totalRows: rows.length,
+      totalRows: normalizedRows.length,
       validRows: normalizedRows.length,
       errorRows: errors.length,
       warningRows: warnings.length,
@@ -332,7 +399,17 @@ export function precheckTaskImportHandler(req: Request, res: Response) {
       warnings,
       normalizedRows: normalizedRows.map(row => ({
         rowIndex: row.rowIndex,
-        ...row.task,
+        mainTaskTitle: row.task.title,
+        title: row.task.title,
+        description: row.task.description,
+        categoryId: row.task.categoryId,
+        versionId: row.task.versionId,
+        priority: row.task.priority,
+        dueDate: row.task.dueDate,
+        reminderTime: row.task.reminderTime,
+        tags: row.task.tags,
+        notes: row.task.notes,
+        totalPomodoros: row.task.totalPomodoros,
         subTaskCount: row.subTasks.length
       }))
     }, canCommit ? '预检通过' : '预检完成，存在错误行')
@@ -377,15 +454,20 @@ export function commitTaskImportHandler(req: Request, res: Response) {
     const versions = getVersionsByUserId(userId)
 
     for (const row of session.rows) {
-      if (!row.task.categoryId) {
-        skippedRelationCount += 1
-      }
-      if (!row.task.versionId) {
-        skippedRelationCount += 1
-      }
+      if (!row.task.categoryId) skippedRelationCount += 1
+      if (!row.task.versionId) skippedRelationCount += 1
 
       const task = createTask({
-        ...row.task,
+        title: row.task.title,
+        description: row.task.description,
+        categoryId: row.task.categoryId,
+        versionId: row.task.versionId,
+        priority: row.task.priority,
+        dueDate: row.task.dueDate,
+        reminderTime: row.task.reminderTime,
+        tags: row.task.tags,
+        notes: row.task.notes,
+        totalPomodoros: row.task.totalPomodoros,
         completedPomodoros: 0,
         createdAt: new Date().toISOString(),
         isCompleted: false,

@@ -141,7 +141,7 @@
   - `fileHash`、`expiresAt`
   - `errors[]`：`rowIndex`、`field`、`reason`
   - `warnings[]`：`rowIndex`、`field`、`reason`
-  - `normalizedRows[]`：标准化后预览（含 `subTaskCount`）
+  - `normalizedRows[]`：标准化后预览（含 `mainTaskTitle`、`title`、`subTaskCount`）
 - `commit` 请求：JSON，必填 `importToken`、`fileHash`。
 - `commit` 返回 `data`：
   - `createdTaskCount`
@@ -164,27 +164,38 @@
 - 文件类型：`.xlsx` / `.xls` / `.csv`。
 - 文件大小：最大 5MB。
 - 行数限制：单次最多 100 行任务。
-- 必填字段：`title`（任务标题）。
+- `xlsx/xls` 必须包含 `tasks` 与 `subtasks` 两个工作表。
+- 必填字段：`title` / `主任务标题`（任务主表中的主任务标题，在**同一导入文件内须唯一**，供子任务表引用）。
 - `priority` 非 `high|medium|low`：回退为 `medium` 并给出 warning。
 - `totalPomodoros < 1` 或非法：回退为 `1` 并给出 warning。
 - `dueDate/reminderTime` 解析失败：置空并给出 warning。
 - `categoryName/versionName` 无匹配：置空并给出 warning（不阻断导入）。
-- `subTasks` 中空子任务：跳过并给出 warning。
+- 旧 `subTasks` 单列拼接格式已废弃（`| ; 换行 ::` 规则不再支持）。
+- `CSV` 仅支持 `tasks` 主表字段，不支持导入子任务。
 
-### 导入模板列（首版）
+### 导入模板列（双 Sheet）
 
-- `title`
-- `description`
-- `priority`
-- `dueDate`
-- `reminderTime`
-- `tags`（支持 `,`、`，`、`|` 分隔）
-- `notes`
-- `totalPomodoros`
-- `categoryName`
-- `versionName`
-- `subTasks`（支持 `|`、`;`、换行分隔；`标题::描述` 可选）
+#### tasks 工作表
+
+- `主任务标题` 或 `title` / `任务标题`（必填，**同一文件内不可重复**）
+- `description` / `任务描述`
+- `priority` / `优先级`
+- `dueDate` / `截止时间`
+- `reminderTime` / `提醒时间`
+- `tags` / `标签`（支持 `,`、`，`、`|` 分隔）
+- `notes` / `备注`
+- `totalPomodoros` / `预估番茄钟`
+- `categoryName` / `分类`
+- `versionName` / `版本`
+- 若仍填写 `taskRef` / `任务引用` 列：解析时**忽略**并给出 warning（子任务仅以主任务标题关联）。
+
+#### subtasks 工作表
+
+- `主任务标题` 或 `parentTitle` / `所属主任务`（必填，须与 tasks 中某行主任务标题**逐字一致**）
+- `title` / `子任务标题`（必填）
+- `description` / `子任务描述`
 
 ### 模板文件
 
-- 前端静态模板：`frontend/public/task-import-template.csv`
+- 双 Sheet xlsx 模板：`frontend/public/task-import-template-v2.xlsx`
+- CSV（仅 tasks 主表）：`frontend/public/task-import-template.csv`
