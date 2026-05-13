@@ -127,7 +127,7 @@
 
 ### 导入流程（MVP）
 
-- `POST /tasks/import/precheck`：上传 Excel/CSV 文件，仅预检，不写入。
+- `POST /tasks/import/precheck`：上传 Excel（`.xlsx`/`.xls`）文件，仅预检，不写入。
 - `POST /tasks/import/commit`：传入 `importToken + fileHash`，确认导入。
 - 预检通过才会返回 `importToken`；有效期 10 分钟。
 
@@ -151,7 +151,7 @@
 
 ### 错误码（导入相关）
 
-- `20012`：未上传文件。
+- `20012`：未上传文件，或文件扩展名不是 `.xlsx`/`.xls`。
 - `20013`：文件为空或缺少数据行。
 - `20014`：超过大小/行数限制。
 - `20015`：预检或上传失败（格式异常）。
@@ -161,7 +161,7 @@
 
 ### 文件限制与默认规则
 
-- 文件类型：`.xlsx` / `.xls` / `.csv`。
+- 文件类型：`.xlsx` / `.xls`（须含 `tasks`、`subtasks` 工作表）。
 - 文件大小：最大 5MB。
 - 行数限制：单次最多 100 行任务。
 - `xlsx/xls` 必须包含 `tasks` 与 `subtasks` 两个工作表。
@@ -172,7 +172,6 @@
 - `categoryName` 无匹配：置空并给出 warning（不阻断导入）。
 - `versionName` 无匹配：**自动创建版本**并关联，同时给出 warning。
 - 旧 `subTasks` 单列拼接格式已废弃（`| ; 换行 ::` 规则不再支持）。
-- `CSV` 仅支持 `tasks` 主表字段，不支持导入子任务。
 
 ### 导入模板列（双 Sheet）
 
@@ -198,4 +197,3 @@
 ### 模板文件
 
 - 双 Sheet xlsx 模板：`frontend/public/task-import-template.xlsx`
-- CSV（仅 tasks 主表）：`frontend/public/task-import-template.csv`

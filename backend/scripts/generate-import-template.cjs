@@ -19,7 +19,7 @@ const SUB_HEADERS = ['主任务标题', '子任务标题', '子任务描述']
 
 const TASK_SAMPLE = [
   ['登录模块优化', '完成 OAuth 与错误码梳理', 'high', '', '', '后端,安全', '', 3, 'Work', 'Release-1.0'],
-  ['报表导出', '支持 CSV 与 Excel', 'medium', '', '', '报表', '', 2, 'Work', 'Release-1.0']
+  ['报表导出', '支持多格式导出', 'medium', '', '', '报表', '', 2, 'Work', 'Release-1.0']
 ]
 
 const SUB_SAMPLE = [

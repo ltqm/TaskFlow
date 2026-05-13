@@ -111,13 +111,10 @@ async function confirmImport() {
         <div class="space-y-4 px-6 py-5">
           <div class="rounded-lg border border-border/80 bg-secondary/40 p-4">
             <p class="text-sm text-foreground/90">
-              支持 <code>.xlsx/.xls/.csv</code>，单次最多 100 行，最大 5MB。
+              支持 <code>.xlsx</code> / <code>.xls</code>，单次最多 100 行，最大 5MB。
             </p>
             <p class="mt-1 text-xs text-muted-foreground">
-              如需导入子任务，请使用双 Sheet 的 xlsx 模板（<code>tasks</code> + <code>subtasks</code>）；子表「主任务标题」须与主表主任务标题完全一致（模板中子表列为下拉，选项来自主表标题列）。
-            </p>
-            <p class="mt-1 text-xs text-muted-foreground">
-              CSV 仅支持任务主表，不支持子任务导入。
+              须使用双 Sheet 模板（<code>tasks</code> + <code>subtasks</code>）；子表「主任务标题」须与主表主任务标题完全一致（模板中子表列为下拉，选项来自主表标题列）。
             </p>
             <div class="mt-2 flex items-center gap-3 text-sm">
               <a
@@ -125,14 +122,7 @@ async function confirmImport() {
                 download
                 class="text-primary hover:underline"
               >
-                下载双 Sheet 模板（xlsx）
-              </a>
-              <a
-                href="/task-import-template.csv"
-                download
-                class="text-primary/90 hover:underline"
-              >
-                下载主表模板（csv）
+                下载导入模板（xlsx）
               </a>
             </div>
           </div>
@@ -141,7 +131,7 @@ async function confirmImport() {
             <label class="mb-2 block text-sm font-medium text-foreground">选择导入文件</label>
             <input
               type="file"
-              accept=".xlsx,.xls,.csv"
+              accept=".xlsx,.xls"
               class="block w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-primary-foreground hover:file:bg-primary/90"
               @change="onSelectFile"
             >

@@ -190,7 +190,7 @@ router.post('/tasks', authenticateToken, createTaskHandler)
  *   post:
  *     tags: [Tasks]
  *     summary: 批量导入任务预检
- *     description: 上传 Excel/CSV 进行预检，不写入数据库。xlsx/xls 需包含 tasks + subtasks 两个 sheet（子表「主任务标题」与主表主任务标题一致）；CSV 仅支持 tasks 主表。
+ *     description: 上传 Excel（.xlsx/.xls）进行预检，不写入数据库。文件须包含 tasks + subtasks 两个工作表（子表「主任务标题」与主表主任务标题一致）。
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -204,7 +204,7 @@ router.post('/tasks', authenticateToken, createTaskHandler)
  *               file:
  *                 type: string
  *                 format: binary
- *                 description: xlsx/xls/csv 文件，最大 5MB，最多 100 行任务
+ *                 description: .xlsx/.xls，最大 5MB，最多 100 行任务，须含 tasks 与 subtasks 工作表
  *     responses:
  *       200:
  *         description: 预检完成

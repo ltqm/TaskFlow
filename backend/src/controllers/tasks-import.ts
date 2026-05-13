@@ -198,7 +198,7 @@ function isRowEmpty(row: Record<string, string>) {
   return Object.values(row).every(v => !v)
 }
 
-function normalizeRowsFromWorkbook(workbook: XLSX.WorkBook, userId: string, filename: string) {
+function normalizeRowsFromWorkbook(workbook: XLSX.WorkBook, userId: string) {
   const errors: ImportIssue[] = []
   const warnings: ImportIssue[] = []
   const categories = getCategoriesByUserId(userId)
@@ -206,29 +206,17 @@ function normalizeRowsFromWorkbook(workbook: XLSX.WorkBook, userId: string, file
   const categoryMap = new Map(categories.map(category => [category.name.trim().toLowerCase(), category]))
   const versionMap = new Map(versions.map(version => [version.name.trim().toLowerCase(), version]))
 
-  const lowerName = filename.toLowerCase()
-  const isCsv = lowerName.endsWith('.csv')
-
   let tasksRaw: Record<string, unknown>[] = []
   let subtasksRaw: Record<string, unknown>[] = []
 
-  if (isCsv) {
-    const firstSheetName = workbook.SheetNames[0]
-    if (!firstSheetName) {
-      return { errors, warnings, normalizedRows: [] as NormalizedImportRow[] }
-    }
-    tasksRaw = getSheetRows(workbook, firstSheetName)
-    warnings.push({ rowIndex: 1, field: 'file', reason: 'CSV 仅支持 tasks 主表，子任务不会被导入' })
-  } else {
-    const hasTasks = workbook.SheetNames.includes('tasks')
-    const hasSubtasks = workbook.SheetNames.includes('subtasks')
-    if (!hasTasks || !hasSubtasks) {
-      errors.push({ rowIndex: 1, field: 'sheet', reason: 'xlsx/xls 文件必须包含 tasks 与 subtasks 两个工作表' })
-      return { errors, warnings, normalizedRows: [] as NormalizedImportRow[] }
-    }
-    tasksRaw = getSheetRows(workbook, 'tasks')
-    subtasksRaw = getSheetRows(workbook, 'subtasks')
+  const hasTasks = workbook.SheetNames.includes('tasks')
+  const hasSubtasks = workbook.SheetNames.includes('subtasks')
+  if (!hasTasks || !hasSubtasks) {
+    errors.push({ rowIndex: 1, field: 'sheet', reason: 'xlsx/xls 文件必须包含 tasks 与 subtasks 两个工作表' })
+    return { errors, warnings, normalizedRows: [] as NormalizedImportRow[] }
   }
+  tasksRaw = getSheetRows(workbook, 'tasks')
+  subtasksRaw = getSheetRows(workbook, 'subtasks')
 
   const normalizedRows: NormalizedImportRow[] = []
   const taskTitleSet = new Set<string>()
@@ -344,15 +332,20 @@ export function precheckTaskImportHandler(req: Request, res: Response) {
     const file = (req as Request & { file?: Express.Multer.File }).file
 
     if (!file) {
-      return fail(res, 400, 20012, '请上传 Excel/CSV 文件')
+      return fail(res, 400, 20012, '请上传 Excel 文件（.xlsx 或 .xls）')
     }
 
     if (file.size > MAX_IMPORT_FILE_BYTES) {
       return fail(res, 400, 20014, '文件过大，最大支持 5MB')
     }
 
+    const name = (file.originalname || '').toLowerCase()
+    if (!name.endsWith('.xlsx') && !name.endsWith('.xls')) {
+      return fail(res, 400, 20012, '仅支持 .xlsx 或 .xls，且须包含 tasks、subtasks 工作表')
+    }
+
     const workbook = getWorkbook(file.buffer)
-    const { errors, warnings, normalizedRows } = normalizeRowsFromWorkbook(workbook, userId, file.originalname)
+    const { errors, warnings, normalizedRows } = normalizeRowsFromWorkbook(workbook, userId)
 
     if (!normalizedRows.length && errors.length === 0) {
       return fail(res, 400, 20013, '导入文件为空或缺少数据行')
