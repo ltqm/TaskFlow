@@ -198,11 +198,11 @@ function isRowEmpty(row: Record<string, string>) {
   return Object.values(row).every(v => !v)
 }
 
-function normalizeRowsFromWorkbook(workbook: XLSX.WorkBook, userId: string) {
+async function normalizeRowsFromWorkbook(workbook: XLSX.WorkBook, userId: string) {
   const errors: ImportIssue[] = []
   const warnings: ImportIssue[] = []
-  const categories = getCategoriesByUserId(userId)
-  const versions = getVersionsByUserId(userId)
+  const categories = await getCategoriesByUserId(userId)
+  const versions = await getVersionsByUserId(userId)
   const categoryMap = new Map(categories.map(category => [category.name.trim().toLowerCase(), category]))
   const versionMap = new Map(versions.map(version => [version.name.trim().toLowerCase(), version]))
 
@@ -222,11 +222,12 @@ function normalizeRowsFromWorkbook(workbook: XLSX.WorkBook, userId: string) {
   const taskTitleSet = new Set<string>()
   const subtaskMap = new Map<string, NormalizedSubTaskInput[]>()
 
-  tasksRaw.forEach((rawRow, index) => {
+  for (let index = 0; index < tasksRaw.length; index++) {
+    const rawRow = tasksRaw[index]
     const rowIndex = index + 2
     const row = canonicalizeRow(rawRow, TASK_HEADER_ALIASES)
 
-    if (isRowEmpty(row)) return
+    if (isRowEmpty(row)) continue
 
     if (row.subTasks) {
       errors.push({ rowIndex, field: 'subTasks', reason: '旧 subTasks 拼接格式已废弃，请使用 subtasks 工作表' })
@@ -236,12 +237,12 @@ function normalizeRowsFromWorkbook(workbook: XLSX.WorkBook, userId: string) {
 
     if (!title) {
       errors.push({ rowIndex, field: 'title', reason: '主任务标题不能为空' })
-      return
+      continue
     }
 
     if (taskTitleSet.has(title)) {
       errors.push({ rowIndex, field: 'title', reason: `主任务标题 "${title}" 在本文件中重复，子任务无法唯一定位` })
-      return
+      continue
     }
     taskTitleSet.add(title)
 
@@ -254,7 +255,7 @@ function normalizeRowsFromWorkbook(workbook: XLSX.WorkBook, userId: string) {
       warnings.push({ rowIndex, field: 'categoryName', reason: `分类 "${categoryName}" 不存在，已置空` })
     }
     if (versionName && !version) {
-      const created = createVersion({
+      const created = await createVersion({
         name: versionName,
         description: '',
         releaseDate: new Date().toISOString().slice(0, 10),
@@ -286,7 +287,7 @@ function normalizeRowsFromWorkbook(workbook: XLSX.WorkBook, userId: string) {
       },
       subTasks: []
     })
-  })
+  }
 
   subtasksRaw.forEach((rawRow, index) => {
     const rowIndex = index + 2
@@ -324,7 +325,7 @@ function normalizeRowsFromWorkbook(workbook: XLSX.WorkBook, userId: string) {
   return { errors, warnings, normalizedRows }
 }
 
-export function precheckTaskImportHandler(req: Request, res: Response) {
+export async function precheckTaskImportHandler(req: Request, res: Response) {
   try {
     cleanupExpiredSessions()
 
@@ -345,7 +346,7 @@ export function precheckTaskImportHandler(req: Request, res: Response) {
     }
 
     const workbook = getWorkbook(file.buffer)
-    const { errors, warnings, normalizedRows } = normalizeRowsFromWorkbook(workbook, userId)
+    const { errors, warnings, normalizedRows } = await normalizeRowsFromWorkbook(workbook, userId)
 
     if (!normalizedRows.length && errors.length === 0) {
       return fail(res, 400, 20013, '导入文件为空或缺少数据行')
@@ -400,7 +401,7 @@ export function precheckTaskImportHandler(req: Request, res: Response) {
   }
 }
 
-export function commitTaskImportHandler(req: Request, res: Response) {
+export async function commitTaskImportHandler(req: Request, res: Response) {
   try {
     cleanupExpiredSessions()
 
@@ -432,14 +433,14 @@ export function commitTaskImportHandler(req: Request, res: Response) {
     const createdTasks = []
     let createdSubtaskCount = 0
     let skippedRelationCount = 0
-    const categories = getCategoriesByUserId(userId)
-    const versions = getVersionsByUserId(userId)
+    const categories = await getCategoriesByUserId(userId)
+    const versions = await getVersionsByUserId(userId)
 
     for (const row of session.rows) {
       if (!row.task.categoryId) skippedRelationCount += 1
       if (!row.task.versionId) skippedRelationCount += 1
 
-      const task = createTask({
+      const task = await createTask({
         title: row.task.title,
         description: row.task.description,
         categoryId: row.task.categoryId,
@@ -456,15 +457,15 @@ export function commitTaskImportHandler(req: Request, res: Response) {
         userId
       })
 
-      row.subTasks.forEach(subTask => {
-        createSubTask({
+      for (const subTask of row.subTasks) {
+        await createSubTask({
           taskId: task.id,
           title: subTask.title,
           description: subTask.description,
           isCompleted: false
         })
         createdSubtaskCount += 1
-      })
+      }
 
       const category = categories.find(item => item.id === task.categoryId)
       const version = versions.find(item => item.id === task.versionId)

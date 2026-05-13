@@ -7,9 +7,9 @@ import router from './routes'
 import { swaggerSpec } from './config/swagger'
 import { fail, ok } from './utils/response'
 
-export function createApp() {
+export async function createApp() {
   const app = express()
-  initDatabase()
+  await initDatabase()
 
   app.use(cors())
   app.use(express.json())

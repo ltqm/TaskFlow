@@ -1,10 +1,10 @@
 import { Request, Response } from 'express'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
-import { createUser, getUserByEmail, getUserByUsername, getUserById } from '../database'
+import { createUser, createCategory, getUserByEmail, getUserByUsername, getUserById } from '../database'
 import { fail, ok } from '../utils/response'
 
-export function register(req: Request, res: Response) {
+export async function register(req: Request, res: Response) {
   try {
     const { username, email, password } = req.body
 
@@ -12,16 +12,16 @@ export function register(req: Request, res: Response) {
       return fail(res, 400, 10011, '缺少必要字段')
     }
 
-    if (getUserByEmail(email)) {
+    if (await getUserByEmail(email)) {
       return fail(res, 400, 10012, '用户已存在')
     }
 
-    if (getUserByUsername(username)) {
+    if (await getUserByUsername(username)) {
       return fail(res, 400, 10013, '用户名已被使用')
     }
 
     const hashedPassword = bcrypt.hashSync(password, 10)
-    const user = createUser({
+    const user = await createUser({
       username,
       email,
       password: hashedPassword,
@@ -34,15 +34,15 @@ export function register(req: Request, res: Response) {
       { name: '生活', color: '#F59E0B' }
     ]
 
-    initialCategories.forEach(cat => {
-      const { createCategory } = require('../database')
-      createCategory({
+    const now = new Date().toISOString()
+    for (const cat of initialCategories) {
+      await createCategory({
         name: cat.name,
         color: cat.color,
         userId: user.id,
-        createdAt: new Date().toISOString()
+        createdAt: now
       })
-    })
+    }
 
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'secret')
     return res.status(201).json({
@@ -55,7 +55,7 @@ export function register(req: Request, res: Response) {
   }
 }
 
-export function login(req: Request, res: Response) {
+export async function login(req: Request, res: Response) {
   try {
     const { email, password } = req.body
 
@@ -63,7 +63,7 @@ export function login(req: Request, res: Response) {
       return fail(res, 400, 10021, '缺少必要字段')
     }
 
-    const user = getUserByEmail(email)
+    const user = await getUserByEmail(email)
     if (!user) {
       return fail(res, 401, 10022, '邮箱或密码错误')
     }
@@ -80,11 +80,11 @@ export function login(req: Request, res: Response) {
   }
 }
 
-export function getUser(req: Request, res: Response) {
+export async function getUser(req: Request, res: Response) {
   try {
     const userId = (req as any).userId
-    const user = getUserById(userId)
-    
+    const user = await getUserById(userId)
+
     if (!user) {
       return fail(res, 404, 10031, '用户不存在')
     }

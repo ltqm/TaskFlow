@@ -1,34 +1,24 @@
 import { Request, Response } from 'express'
-import { getCategoriesByUserId, getCategoryById, createCategory, updateCategory as dbUpdateCategory, deleteCategory as dbDeleteCategory } from '../database'
+import {
+  getCategoriesByUserId,
+  getCategoryById,
+  createCategory,
+  updateCategory as dbUpdateCategory,
+  deleteCategory as dbDeleteCategory
+} from '../database'
 import { fail, ok } from '../utils/response'
 
-export function getAllCategories(req: Request, res: Response) {
+export async function getAllCategories(req: Request, res: Response) {
   try {
     const userId = (req as any).userId
-    const categories = getCategoriesByUserId(userId)
+    const categories = await getCategoriesByUserId(userId)
     return ok(res, categories)
   } catch (error) {
     return fail(res, 500, 30099, '获取分类列表失败')
   }
 }
 
-export function getCategoryByIdHandler(req: Request, res: Response) {
-  try {
-    const userId = (req as any).userId
-    const { id } = req.params
-    
-    const category = getCategoryById(id, userId)
-    if (!category) {
-      return fail(res, 404, 30001, '分类不存在')
-    }
-    
-    return ok(res, category)
-  } catch (error) {
-    return fail(res, 500, 30098, '获取分类失败')
-  }
-}
-
-export function createCategoryHandler(req: Request, res: Response) {
+export async function createCategoryHandler(req: Request, res: Response) {
   try {
     const userId = (req as any).userId
     const { name, color = '#3B82F6' } = req.body
@@ -37,18 +27,19 @@ export function createCategoryHandler(req: Request, res: Response) {
       return fail(res, 400, 30011, '分类名称不能为空')
     }
 
-    const existingCategory = getCategoriesByUserId(userId).find(c => c.name === name)
+    const list = await getCategoriesByUserId(userId)
+    const existingCategory = list.find(c => c.name === name)
     if (existingCategory) {
       return fail(res, 400, 30012, '分类已存在')
     }
 
-    const category = createCategory({
+    const category = await createCategory({
       name,
       color,
       userId,
       createdAt: new Date().toISOString()
     })
-    
+
     return res.status(201).json({
       code: 0,
       data: category,
@@ -59,13 +50,13 @@ export function createCategoryHandler(req: Request, res: Response) {
   }
 }
 
-export function updateCategoryHandler(req: Request, res: Response) {
+export async function updateCategoryHandler(req: Request, res: Response) {
   try {
     const userId = (req as any).userId
     const { id } = req.params
     const { name, color } = req.body
 
-    const existingCategory = getCategoryById(id, userId)
+    const existingCategory = await getCategoryById(id, userId)
     if (!existingCategory) {
       return fail(res, 404, 30001, '分类不存在')
     }
@@ -78,7 +69,7 @@ export function updateCategoryHandler(req: Request, res: Response) {
       return fail(res, 400, 30013, '没有提供更新字段')
     }
 
-    const category = dbUpdateCategory(id, userId, updates)
+    const category = await dbUpdateCategory(id, userId, updates)
     if (!category) {
       return fail(res, 404, 30001, '分类不存在')
     }
@@ -89,12 +80,12 @@ export function updateCategoryHandler(req: Request, res: Response) {
   }
 }
 
-export function deleteCategoryHandler(req: Request, res: Response) {
+export async function deleteCategoryHandler(req: Request, res: Response) {
   try {
     const userId = (req as any).userId
     const { id } = req.params
 
-    const success = dbDeleteCategory(id, userId)
+    const success = await dbDeleteCategory(id, userId)
     if (!success) {
       return fail(res, 404, 30001, '分类不存在')
     }

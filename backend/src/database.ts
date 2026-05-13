@@ -1,4 +1,5 @@
-import fs from 'fs'
+import { Prisma } from '@prisma/client'
+import { prisma } from './db/prisma'
 
 export interface User {
   id: string
@@ -53,257 +54,443 @@ export interface Task {
   userId: string
 }
 
-interface Database {
-  users: User[]
-  categories: Category[]
-  versions: Version[]
-  tasks: Task[]
-  subTasks: SubTask[]
+function newId(): string {
+  return Date.now().toString()
 }
 
-let db: Database = {
-  users: [],
-  categories: [],
-  versions: [],
-  tasks: [],
-  subTasks: []
-}
-
-const DATA_DIR = './data'
-const DATA_FILE = `${DATA_DIR}/database.json`
-
-export function initDatabase() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true })
+function parseTags(value: Prisma.JsonValue): string[] {
+  if (value == null) return []
+  if (Array.isArray(value)) {
+    return value.filter((v): v is string => typeof v === 'string')
   }
+  return []
+}
 
-  if (fs.existsSync(DATA_FILE)) {
-    try {
-      const data = fs.readFileSync(DATA_FILE, 'utf-8')
-      const parsed = JSON.parse(data)
-      db = { ...db, ...parsed }
-      if (!db.subTasks) db.subTasks = []
-    } catch {
-      db = { users: [], categories: [], versions: [], tasks: [], subTasks: [] }
-    }
+function tagsJson(tags: string[]): Prisma.InputJsonValue {
+  return tags as Prisma.InputJsonValue
+}
+
+function toUser(u: { id: string; username: string; email: string; password: string; createdAt: Date }): User {
+  return {
+    id: u.id,
+    username: u.username,
+    email: u.email,
+    password: u.password,
+    createdAt: u.createdAt.toISOString()
   }
-
-  return db
 }
 
-function saveDatabase() {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2))
+function toCategory(c: {
+  id: string
+  name: string
+  color: string
+  userId: string
+  createdAt: Date
+}): Category {
+  return {
+    id: c.id,
+    name: c.name,
+    color: c.color,
+    userId: c.userId,
+    createdAt: c.createdAt.toISOString()
+  }
 }
 
-export function createUser(user: Omit<User, 'id'>): User {
-  const newUser: User = { ...user, id: Date.now().toString() }
-  db.users.push(newUser)
-  saveDatabase()
-  return newUser
+function toVersion(v: {
+  id: string
+  name: string
+  description: string
+  releaseDate: string
+  userId: string
+  createdAt: Date
+}): Version {
+  return {
+    id: v.id,
+    name: v.name,
+    description: v.description,
+    releaseDate: v.releaseDate,
+    userId: v.userId,
+    createdAt: v.createdAt.toISOString()
+  }
 }
 
-export function getUserByEmail(email: string): User | undefined {
-  return db.users.find(u => u.email === email)
+function toTask(t: {
+  id: string
+  title: string
+  description: string
+  categoryId: string | null
+  versionId: string | null
+  priority: string
+  dueDate: string | null
+  reminderTime: string | null
+  tags: Prisma.JsonValue
+  notes: string
+  completedPomodoros: number
+  totalPomodoros: number
+  createdAt: Date
+  isCompleted: boolean
+  userId: string
+}): Task {
+  return {
+    id: t.id,
+    title: t.title,
+    description: t.description,
+    categoryId: t.categoryId,
+    versionId: t.versionId,
+    priority: t.priority as Task['priority'],
+    dueDate: t.dueDate,
+    reminderTime: t.reminderTime,
+    tags: parseTags(t.tags),
+    notes: t.notes,
+    completedPomodoros: t.completedPomodoros,
+    totalPomodoros: t.totalPomodoros,
+    createdAt: t.createdAt.toISOString(),
+    isCompleted: t.isCompleted,
+    userId: t.userId
+  }
 }
 
-export function getUserByUsername(username: string): User | undefined {
-  return db.users.find(u => u.username === username)
+function toSubTask(s: {
+  id: string
+  taskId: string
+  title: string
+  description: string
+  isCompleted: boolean
+  createdAt: Date
+  updatedAt: Date
+}): SubTask {
+  return {
+    id: s.id,
+    taskId: s.taskId,
+    title: s.title,
+    description: s.description,
+    isCompleted: s.isCompleted,
+    createdAt: s.createdAt.toISOString(),
+    updatedAt: s.updatedAt.toISOString()
+  }
 }
 
-export function getUserById(id: string): User | undefined {
-  return db.users.find(u => u.id === id)
+export async function initDatabase(): Promise<void> {
+  await prisma.$connect()
+  await prisma.$queryRaw`SELECT 1`
 }
 
-export function createCategory(category: Omit<Category, 'id'>): Category {
-  const newCategory: Category = { ...category, id: Date.now().toString() }
-  db.categories.push(newCategory)
-  saveDatabase()
-  return newCategory
+export async function disconnectDatabase(): Promise<void> {
+  await prisma.$disconnect()
 }
 
-export function getCategoriesByUserId(userId: string): Category[] {
-  return db.categories.filter(c => c.userId === userId)
-}
-
-export function getCategoryById(id: string, userId: string): Category | undefined {
-  return db.categories.find(c => c.id === id && c.userId === userId)
-}
-
-export function updateCategory(id: string, userId: string, updates: Partial<Category>): Category | undefined {
-  const index = db.categories.findIndex(c => c.id === id && c.userId === userId)
-  if (index === -1) return undefined
-  db.categories[index] = { ...db.categories[index], ...updates }
-  saveDatabase()
-  return db.categories[index]
-}
-
-export function deleteCategory(id: string, userId: string): boolean {
-  const index = db.categories.findIndex(c => c.id === id && c.userId === userId)
-  if (index === -1) return false
-  db.categories.splice(index, 1)
-  db.tasks.forEach(t => {
-    if (t.categoryId === id) {
-      t.categoryId = null
+export async function createUser(user: Omit<User, 'id'>): Promise<User> {
+  const row = await prisma.user.create({
+    data: {
+      id: newId(),
+      username: user.username,
+      email: user.email,
+      password: user.password,
+      createdAt: new Date(user.createdAt)
     }
   })
-  saveDatabase()
-  return true
+  return toUser(row)
 }
 
-export function createVersion(version: Omit<Version, 'id'>): Version {
-  const newVersion: Version = { ...version, id: Date.now().toString() }
-  db.versions.push(newVersion)
-  saveDatabase()
-  return newVersion
+export async function getUserByEmail(email: string): Promise<User | undefined> {
+  const row = await prisma.user.findUnique({ where: { email } })
+  return row ? toUser(row) : undefined
 }
 
-export function getVersionsByUserId(userId: string): Version[] {
-  return db.versions.filter(v => v.userId === userId).sort((a, b) => 
-    new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime()
-  )
+export async function getUserByUsername(username: string): Promise<User | undefined> {
+  const row = await prisma.user.findFirst({ where: { username } })
+  return row ? toUser(row) : undefined
 }
 
-export function getVersionById(id: string, userId: string): Version | undefined {
-  return db.versions.find(v => v.id === id && v.userId === userId)
+export async function getUserById(id: string): Promise<User | undefined> {
+  const row = await prisma.user.findUnique({ where: { id } })
+  return row ? toUser(row) : undefined
 }
 
-export function updateVersion(id: string, userId: string, updates: Partial<Version>): Version | undefined {
-  const index = db.versions.findIndex(v => v.id === id && v.userId === userId)
-  if (index === -1) return undefined
-  db.versions[index] = { ...db.versions[index], ...updates }
-  saveDatabase()
-  return db.versions[index]
-}
-
-export function deleteVersion(id: string, userId: string): boolean {
-  const index = db.versions.findIndex(v => v.id === id && v.userId === userId)
-  if (index === -1) return false
-  db.versions.splice(index, 1)
-  db.tasks.forEach(t => {
-    if (t.versionId === id) {
-      t.versionId = null
+export async function createCategory(category: Omit<Category, 'id'>): Promise<Category> {
+  const row = await prisma.category.create({
+    data: {
+      id: newId(),
+      name: category.name,
+      color: category.color,
+      userId: category.userId,
+      createdAt: new Date(category.createdAt)
     }
   })
-  saveDatabase()
-  return true
+  return toCategory(row)
 }
 
-export function createTask(task: Omit<Task, 'id'>): Task {
-  const newTask: Task = { ...task, id: Date.now().toString() }
-  db.tasks.push(newTask)
-  saveDatabase()
-  return newTask
+export async function getCategoriesByUserId(userId: string): Promise<Category[]> {
+  const rows = await prisma.category.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'asc' }
+  })
+  return rows.map(toCategory)
 }
 
-export function getTasksByUserId(userId: string): Task[] {
-  return db.tasks.filter(t => t.userId === userId).sort((a, b) => 
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )
+export async function getCategoryById(id: string, userId: string): Promise<Category | undefined> {
+  const row = await prisma.category.findFirst({ where: { id, userId } })
+  return row ? toCategory(row) : undefined
 }
 
-export function getTasksByVersionId(versionId: string, userId: string): Task[] {
-  return db.tasks.filter(t => t.versionId === versionId && t.userId === userId).sort((a, b) => 
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )
+export async function updateCategory(
+  id: string,
+  userId: string,
+  updates: Partial<Category>
+): Promise<Category | undefined> {
+  const existing = await prisma.category.findFirst({ where: { id, userId } })
+  if (!existing) return undefined
+
+  const data: Prisma.CategoryUpdateInput = {}
+  if (updates.name !== undefined) data.name = updates.name
+  if (updates.color !== undefined) data.color = updates.color
+
+  const row = await prisma.category.update({
+    where: { id },
+    data
+  })
+  return toCategory(row)
 }
 
-export function getTaskById(id: string, userId: string): Task | undefined {
-  return db.tasks.find(t => t.id === id && t.userId === userId)
+export async function deleteCategory(id: string, userId: string): Promise<boolean> {
+  const result = await prisma.category.deleteMany({ where: { id, userId } })
+  return result.count > 0
 }
 
-export function updateTask(id: string, userId: string, updates: Partial<Task>): Task | undefined {
-  const index = db.tasks.findIndex(t => t.id === id && t.userId === userId)
-  if (index === -1) return undefined
-  
-  if (updates.isCompleted !== undefined) {
-    if (updates.isCompleted) {
-      const subTasks = getSubTasksByTaskId(id)
-      subTasks.forEach(st => {
-        updateSubTask(st.id, { isCompleted: true })
-      })
+export async function createVersion(version: Omit<Version, 'id'>): Promise<Version> {
+  const row = await prisma.version.create({
+    data: {
+      id: newId(),
+      name: version.name,
+      description: version.description,
+      releaseDate: version.releaseDate,
+      userId: version.userId,
+      createdAt: new Date(version.createdAt)
     }
-  }
-  
-  db.tasks[index] = { ...db.tasks[index], ...updates }
-  saveDatabase()
-  return db.tasks[index]
+  })
+  return toVersion(row)
 }
 
-export function deleteTask(id: string, userId: string): boolean {
-  const index = db.tasks.findIndex(t => t.id === id && t.userId === userId)
-  if (index === -1) return false
-  db.tasks.splice(index, 1)
-  db.subTasks = db.subTasks.filter(st => st.taskId !== id)
-  saveDatabase()
-  return true
+export async function getVersionsByUserId(userId: string): Promise<Version[]> {
+  const rows = await prisma.version.findMany({
+    where: { userId },
+    orderBy: { releaseDate: 'desc' }
+  })
+  return rows.map(toVersion)
 }
 
-export function createSubTask(subTask: Omit<SubTask, 'id' | 'createdAt' | 'updatedAt'>): SubTask {
-  const now = new Date().toISOString()
-  const newSubTask: SubTask = { 
-    ...subTask, 
-    id: Date.now().toString(),
-    createdAt: now,
-    updatedAt: now
-  }
-  db.subTasks.push(newSubTask)
-  syncTaskCompletedWithSubTasks(newSubTask.taskId)
-  saveDatabase()
-  return newSubTask
+export async function getVersionById(id: string, userId: string): Promise<Version | undefined> {
+  const row = await prisma.version.findFirst({ where: { id, userId } })
+  return row ? toVersion(row) : undefined
 }
 
-export function getSubTasksByTaskId(taskId: string): SubTask[] {
-  return db.subTasks.filter(st => st.taskId === taskId).sort((a, b) => 
-    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  )
+export async function updateVersion(
+  id: string,
+  userId: string,
+  updates: Partial<Version>
+): Promise<Version | undefined> {
+  const existing = await prisma.version.findFirst({ where: { id, userId } })
+  if (!existing) return undefined
+
+  const data: Prisma.VersionUpdateInput = {}
+  if (updates.name !== undefined) data.name = updates.name
+  if (updates.description !== undefined) data.description = updates.description
+  if (updates.releaseDate !== undefined) data.releaseDate = updates.releaseDate
+
+  const row = await prisma.version.update({
+    where: { id },
+    data
+  })
+  return toVersion(row)
 }
 
-/** 根据子任务完成情况同步主任务完成状态（有子任务时：全部完成则主任务完成，否则未完成） */
-function syncTaskCompletedWithSubTasks(taskId: string) {
-  const taskIndex = db.tasks.findIndex(t => t.id === taskId)
-  if (taskIndex === -1) return
+export async function deleteVersion(id: string, userId: string): Promise<boolean> {
+  const result = await prisma.version.deleteMany({ where: { id, userId } })
+  return result.count > 0
+}
 
-  const subTasks = getSubTasksByTaskId(taskId)
+export async function createTask(task: Omit<Task, 'id'>): Promise<Task> {
+  const row = await prisma.task.create({
+    data: {
+      id: newId(),
+      title: task.title,
+      description: task.description,
+      categoryId: task.categoryId,
+      versionId: task.versionId,
+      priority: task.priority,
+      dueDate: task.dueDate,
+      reminderTime: task.reminderTime,
+      tags: tagsJson(task.tags),
+      notes: task.notes,
+      completedPomodoros: task.completedPomodoros,
+      totalPomodoros: task.totalPomodoros,
+      createdAt: new Date(task.createdAt),
+      isCompleted: task.isCompleted,
+      userId: task.userId
+    }
+  })
+  return toTask(row)
+}
+
+export async function getTasksByUserId(userId: string): Promise<Task[]> {
+  const rows = await prisma.task.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' }
+  })
+  return rows.map(toTask)
+}
+
+export async function getTasksByVersionId(versionId: string, userId: string): Promise<Task[]> {
+  const rows = await prisma.task.findMany({
+    where: { versionId, userId },
+    orderBy: { createdAt: 'desc' }
+  })
+  return rows.map(toTask)
+}
+
+export async function getTaskById(id: string, userId: string): Promise<Task | undefined> {
+  const row = await prisma.task.findFirst({ where: { id, userId } })
+  return row ? toTask(row) : undefined
+}
+
+async function syncTaskCompletedWithSubTasksTx(tx: Prisma.TransactionClient, taskId: string): Promise<void> {
+  const task = await tx.task.findUnique({ where: { id: taskId } })
+  if (!task) return
+
+  const subTasks = await tx.subTask.findMany({
+    where: { taskId },
+    orderBy: { createdAt: 'asc' }
+  })
   if (subTasks.length === 0) return
 
   const allDone = subTasks.every(st => st.isCompleted)
-  const task = db.tasks[taskIndex]
   if (task.isCompleted === allDone) return
 
-  db.tasks[taskIndex] = { ...task, isCompleted: allDone }
+  await tx.task.update({
+    where: { id: taskId },
+    data: { isCompleted: allDone }
+  })
 }
 
-export function getSubTaskById(id: string): SubTask | undefined {
-  return db.subTasks.find(st => st.id === id)
-}
+export async function updateTask(id: string, userId: string, updates: Partial<Task>): Promise<Task | undefined> {
+  const existing = await prisma.task.findFirst({ where: { id, userId } })
+  if (!existing) return undefined
 
-export function updateSubTask(id: string, updates: Partial<SubTask>): SubTask | undefined {
-  const index = db.subTasks.findIndex(st => st.id === id)
-  if (index === -1) return undefined
-  
-  const subTask = db.subTasks[index]
-  const taskId = subTask.taskId
-  
-  db.subTasks[index] = { 
-    ...db.subTasks[index], 
-    ...updates,
-    updatedAt: new Date().toISOString()
+  const data: Prisma.TaskUncheckedUpdateInput = {}
+  if (updates.title !== undefined) data.title = updates.title
+  if (updates.description !== undefined) data.description = updates.description
+  if (updates.categoryId !== undefined) data.categoryId = updates.categoryId
+  if (updates.versionId !== undefined) data.versionId = updates.versionId
+  if (updates.priority !== undefined) data.priority = updates.priority
+  if (updates.dueDate !== undefined) data.dueDate = updates.dueDate
+  if (updates.reminderTime !== undefined) data.reminderTime = updates.reminderTime
+  if (updates.tags !== undefined) data.tags = tagsJson(updates.tags)
+  if (updates.notes !== undefined) data.notes = updates.notes
+  if (updates.completedPomodoros !== undefined) data.completedPomodoros = updates.completedPomodoros
+  if (updates.totalPomodoros !== undefined) data.totalPomodoros = updates.totalPomodoros
+  if (updates.createdAt !== undefined) data.createdAt = new Date(updates.createdAt)
+  if (updates.isCompleted !== undefined) data.isCompleted = updates.isCompleted
+
+  const cascadeCompleteChildren = updates.isCompleted === true
+  if (Object.keys(data).length === 0 && !cascadeCompleteChildren) {
+    return toTask(existing)
   }
-  
-  if (updates.isCompleted !== undefined) {
-    syncTaskCompletedWithSubTasks(taskId)
-  }
 
-  saveDatabase()
-  return db.subTasks[index]
+  return prisma.$transaction(async tx => {
+    if (cascadeCompleteChildren) {
+      await tx.subTask.updateMany({
+        where: { taskId: id },
+        data: { isCompleted: true, updatedAt: new Date() }
+      })
+    }
+    if (Object.keys(data).length === 0) {
+      const row = await tx.task.findUniqueOrThrow({ where: { id } })
+      return toTask(row)
+    }
+    const row = await tx.task.update({
+      where: { id },
+      data
+    })
+    return toTask(row)
+  })
 }
 
-export function deleteSubTask(id: string): boolean {
-  const index = db.subTasks.findIndex(st => st.id === id)
-  if (index === -1) return false
-  const taskId = db.subTasks[index].taskId
-  db.subTasks.splice(index, 1)
-  syncTaskCompletedWithSubTasks(taskId)
-  saveDatabase()
+export async function deleteTask(id: string, userId: string): Promise<boolean> {
+  const result = await prisma.task.deleteMany({ where: { id, userId } })
+  return result.count > 0
+}
+
+export async function createSubTask(
+  subTask: Omit<SubTask, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<SubTask> {
+  const id = newId()
+  const now = new Date()
+
+  await prisma.$transaction(async tx => {
+    await tx.subTask.create({
+      data: {
+        id,
+        taskId: subTask.taskId,
+        title: subTask.title,
+        description: subTask.description,
+        isCompleted: subTask.isCompleted,
+        createdAt: now,
+        updatedAt: now
+      }
+    })
+    await syncTaskCompletedWithSubTasksTx(tx, subTask.taskId)
+  })
+
+  const row = await prisma.subTask.findUniqueOrThrow({ where: { id } })
+  return toSubTask(row)
+}
+
+export async function getSubTasksByTaskId(taskId: string): Promise<SubTask[]> {
+  const rows = await prisma.subTask.findMany({
+    where: { taskId },
+    orderBy: { createdAt: 'asc' }
+  })
+  return rows.map(toSubTask)
+}
+
+export async function updateSubTask(id: string, updates: Partial<SubTask>): Promise<SubTask | undefined> {
+  const existing = await prisma.subTask.findUnique({ where: { id } })
+  if (!existing) return undefined
+
+  const taskId = existing.taskId
+
+  await prisma.$transaction(async tx => {
+    const data: Prisma.SubTaskUpdateInput = {
+      updatedAt: new Date()
+    }
+    if (updates.title !== undefined) data.title = updates.title
+    if (updates.description !== undefined) data.description = updates.description
+    if (updates.isCompleted !== undefined) data.isCompleted = updates.isCompleted
+
+    await tx.subTask.update({
+      where: { id },
+      data
+    })
+
+    if (updates.isCompleted !== undefined) {
+      await syncTaskCompletedWithSubTasksTx(tx, taskId)
+    }
+  })
+
+  const row = await prisma.subTask.findUnique({ where: { id } })
+  return row ? toSubTask(row) : undefined
+}
+
+export async function deleteSubTask(id: string): Promise<boolean> {
+  const existing = await prisma.subTask.findUnique({ where: { id } })
+  if (!existing) return false
+
+  const taskId = existing.taskId
+
+  await prisma.$transaction(async tx => {
+    await tx.subTask.delete({ where: { id } })
+    await syncTaskCompletedWithSubTasksTx(tx, taskId)
+  })
+
   return true
 }

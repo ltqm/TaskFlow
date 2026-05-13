@@ -2,7 +2,10 @@ import axios from 'axios'
 import type { AxiosResponse } from 'axios'
 import type { Task, Category, User, Version, SubTask } from '@/types'
 
-const API_BASE_URL = 'http://localhost:8088/api'
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.length > 0
+    ? import.meta.env.VITE_API_BASE_URL
+    : 'http://localhost:8089/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -77,9 +80,7 @@ function unwrapResponse<T>(payload: unknown): T {
     if (payload.code === 0) return payload.data
     throw createApiError(payload.msg || '请求失败', payload.code)
   }
-
-  // 兼容老接口结构，便于渐进迁移
-  return payload as T
+  throw createApiError('响应格式无效')
 }
 
 async function requestData<T>(request: Promise<AxiosResponse<ApiEnvelope<T> | T>>): Promise<T> {
@@ -151,24 +152,12 @@ export async function createCategory(name: string, color: string): Promise<Categ
   return requestData<Category>(api.post('/categories', { name, color }))
 }
 
-export async function updateCategory(id: string, name: string, color: string): Promise<Category> {
-  return requestData<Category>(api.put(`/categories/${id}`, { name, color }))
-}
-
-export async function deleteCategory(id: string): Promise<void> {
-  await api.delete(`/categories/${id}`)
-}
-
 export async function getVersions(): Promise<Version[]> {
   return requestData<Version[]>(api.get('/versions'))
 }
 
 export async function getVersionById(id: string): Promise<Version & { tasks: Task[] }> {
   return requestData<Version & { tasks: Task[] }>(api.get(`/versions/${id}`))
-}
-
-export async function getTasksByVersion(id: string): Promise<Task[]> {
-  return requestData<Task[]>(api.get(`/versions/${id}/tasks`))
 }
 
 export async function createVersion(name: string, description: string, releaseDate: string): Promise<Version> {

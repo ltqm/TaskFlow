@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String     @id @db.VarChar(64)
+  username   String     @db.VarChar(191)
+  email      String     @unique @db.VarChar(191)
+  password   String     @db.VarChar(255)
+  createdAt  DateTime   @map("created_at")
+  categories Category[]
+  versions   Version[]
+  tasks      Task[]
+
+  @@map("users")
+}
+
+model Category {
+  id        String   @id @db.VarChar(64)
+  name      String   @db.VarChar(191)
+  color     String   @db.VarChar(32)
+  userId    String   @map("user_id") @db.VarChar(64)
+  createdAt DateTime @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@index([userId])
+  @@map("categories")
+}
+
+model Version {
+  id          String   @id @db.VarChar(64)
+  name        String   @db.VarChar(191)
+  description String   @db.Text
+  releaseDate String   @map("release_date") @db.VarChar(32)
+  userId      String   @map("user_id") @db.VarChar(64)
+  createdAt   DateTime @map("created_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+
+  @@index([userId])
+  @@map("versions")
+}
+
+model Task {
+  id                 String    @id @db.VarChar(64)
+  title              String    @db.VarChar(191)
+  description        String    @db.Text
+  categoryId         String?   @map("category_id") @db.VarChar(64)
+  versionId          String?   @map("version_id") @db.VarChar(64)
+  priority           String    @db.VarChar(16)
+  dueDate            String?   @map("due_date") @db.VarChar(128)
+  reminderTime       String?   @map("reminder_time") @db.VarChar(128)
+  tags               Json
+  notes              String    @db.Text
+  completedPomodoros Int       @map("completed_pomodoros")
+  totalPomodoros     Int       @map("total_pomodoros")
+  createdAt          DateTime  @map("created_at")
+  isCompleted        Boolean   @map("is_completed")
+  userId             String    @map("user_id") @db.VarChar(64)
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category           Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  version            Version?  @relation(fields: [versionId], references: [id], onDelete: SetNull)
+  subTasks           SubTask[]
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([versionId])
+  @@map("tasks")
+}
+
+model SubTask {
+  id          String   @id @db.VarChar(64)
+  taskId      String   @map("task_id") @db.VarChar(64)
+  title       String   @db.VarChar(191)
+  description String   @db.Text
+  isCompleted Boolean  @map("is_completed")
+  createdAt   DateTime @map("created_at")
+  updatedAt   DateTime @map("updated_at")
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("sub_tasks")
+}

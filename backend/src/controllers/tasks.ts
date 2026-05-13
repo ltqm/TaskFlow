@@ -1,13 +1,21 @@
 import { Request, Response } from 'express'
-import { getTasksByUserId, getTaskById, createTask, updateTask, deleteTask as dbDeleteTask, getCategoriesByUserId, getVersionsByUserId } from '../database'
+import {
+  getTasksByUserId,
+  getTaskById,
+  createTask,
+  updateTask,
+  deleteTask as dbDeleteTask,
+  getCategoriesByUserId,
+  getVersionsByUserId
+} from '../database'
 import { fail, ok } from '../utils/response'
 
-export function getAllTasks(req: Request, res: Response) {
+export async function getAllTasks(req: Request, res: Response) {
   try {
     const userId = (req as any).userId
-    const tasks = getTasksByUserId(userId)
-    const categories = getCategoriesByUserId(userId)
-    const versions = getVersionsByUserId(userId)
+    const tasks = await getTasksByUserId(userId)
+    const categories = await getCategoriesByUserId(userId)
+    const versions = await getVersionsByUserId(userId)
 
     const formattedTasks = tasks.map(task => {
       const category = categories.find(c => c.id === task.categoryId)
@@ -26,18 +34,18 @@ export function getAllTasks(req: Request, res: Response) {
   }
 }
 
-export function getTaskByIdHandler(req: Request, res: Response) {
+export async function getTaskByIdHandler(req: Request, res: Response) {
   try {
     const userId = (req as any).userId
     const { id } = req.params
 
-    const task = getTaskById(id, userId)
+    const task = await getTaskById(id, userId)
     if (!task) {
       return fail(res, 404, 20001, '任务不存在')
     }
 
-    const categories = getCategoriesByUserId(userId)
-    const versions = getVersionsByUserId(userId)
+    const categories = await getCategoriesByUserId(userId)
+    const versions = await getVersionsByUserId(userId)
     const category = categories.find(c => c.id === task.categoryId)
     const version = versions.find(v => v.id === task.versionId)
 
@@ -52,7 +60,7 @@ export function getTaskByIdHandler(req: Request, res: Response) {
   }
 }
 
-export function createTaskHandler(req: Request, res: Response) {
+export async function createTaskHandler(req: Request, res: Response) {
   try {
     const userId = (req as any).userId
     const {
@@ -76,13 +84,13 @@ export function createTaskHandler(req: Request, res: Response) {
       return fail(res, 400, 20012, '新增任务必须关联版本')
     }
 
-    const versions = getVersionsByUserId(userId)
+    const versions = await getVersionsByUserId(userId)
     const targetVersion = versions.find(v => v.id === versionId)
     if (!targetVersion) {
       return fail(res, 400, 20013, '关联版本不存在或无权限')
     }
 
-    const task = createTask({
+    const task = await createTask({
       title,
       description,
       categoryId,
@@ -99,17 +107,17 @@ export function createTaskHandler(req: Request, res: Response) {
       userId
     })
 
-    const categories = getCategoriesByUserId(userId)
+    const categories = await getCategoriesByUserId(userId)
     const category = categories.find(c => c.id === task.categoryId)
     const version = versions.find(v => v.id === task.versionId)
 
     return res.status(201).json({
       code: 0,
       data: {
-      ...task,
-      categoryName: category?.name || null,
-      categoryColor: category?.color || null,
-      versionName: version?.name || null
+        ...task,
+        categoryName: category?.name || null,
+        categoryColor: category?.color || null,
+        versionName: version?.name || null
       },
       msg: ''
     })
@@ -118,24 +126,24 @@ export function createTaskHandler(req: Request, res: Response) {
   }
 }
 
-export function updateTaskHandler(req: Request, res: Response) {
+export async function updateTaskHandler(req: Request, res: Response) {
   try {
     const userId = (req as any).userId
     const { id } = req.params
     const updates = req.body
 
-    const existingTask = getTaskById(id, userId)
+    const existingTask = await getTaskById(id, userId)
     if (!existingTask) {
       return fail(res, 404, 20001, '任务不存在')
     }
 
-    const task = updateTask(id, userId, updates)
+    const task = await updateTask(id, userId, updates)
     if (!task) {
       return fail(res, 404, 20001, '任务不存在')
     }
 
-    const categories = getCategoriesByUserId(userId)
-    const versions = getVersionsByUserId(userId)
+    const categories = await getCategoriesByUserId(userId)
+    const versions = await getVersionsByUserId(userId)
     const category = categories.find(c => c.id === task.categoryId)
     const version = versions.find(v => v.id === task.versionId)
 
@@ -150,12 +158,12 @@ export function updateTaskHandler(req: Request, res: Response) {
   }
 }
 
-export function deleteTaskHandler(req: Request, res: Response) {
+export async function deleteTaskHandler(req: Request, res: Response) {
   try {
     const userId = (req as any).userId
     const { id } = req.params
 
-    const success = dbDeleteTask(id, userId)
+    const success = await dbDeleteTask(id, userId)
     if (!success) {
       return fail(res, 404, 20001, '任务不存在')
     }

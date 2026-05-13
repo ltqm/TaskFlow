@@ -2,10 +2,10 @@ import { NextFunction, Request, Response, Router } from 'express'
 import multer from 'multer'
 import { getAllTasks, getTaskByIdHandler, createTaskHandler, updateTaskHandler, deleteTaskHandler } from '../controllers/tasks'
 import { precheckTaskImportHandler, commitTaskImportHandler } from '../controllers/tasks-import'
-import { getAllCategories, getCategoryByIdHandler, createCategoryHandler, updateCategoryHandler, deleteCategoryHandler } from '../controllers/categories'
-import { getAllVersions, getVersionByIdHandler, createVersionHandler, updateVersionHandler, deleteVersionHandler, getTasksByVersion } from '../controllers/versions'
+import { getAllCategories, createCategoryHandler, updateCategoryHandler, deleteCategoryHandler } from '../controllers/categories'
+import { getAllVersions, getVersionByIdHandler, createVersionHandler, updateVersionHandler, deleteVersionHandler } from '../controllers/versions'
 import { register, login, getUser } from '../controllers/auth'
-import { createSubTaskHandler, getSubTasksHandler, getSubTaskHandler, updateSubTaskHandler, deleteSubTaskHandler } from '../controllers/subtasks'
+import { createSubTaskHandler, getSubTasksHandler, updateSubTaskHandler, deleteSubTaskHandler } from '../controllers/subtasks'
 import { authenticateToken } from '../middleware/auth'
 import { fail } from '../utils/response'
 
@@ -392,24 +392,6 @@ router.post('/categories', authenticateToken, createCategoryHandler)
 /**
  * @openapi
  * /categories/{id}:
- *   get:
- *     tags: [Categories]
- *     summary: 获取分类详情
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/id'
- *     responses:
- *       200:
- *         description: 获取成功
- *       401:
- *         $ref: '#/components/responses/Unauthorized'
- *       403:
- *         $ref: '#/components/responses/Forbidden'
- *       404:
- *         description: 分类不存在
- *       500:
- *         $ref: '#/components/responses/InternalError'
  *   put:
  *     tags: [Categories]
  *     summary: 更新分类
@@ -460,7 +442,6 @@ router.post('/categories', authenticateToken, createCategoryHandler)
  *       500:
  *         $ref: '#/components/responses/InternalError'
  */
-router.get('/categories/:id', authenticateToken, getCategoryByIdHandler)
 router.put('/categories/:id', authenticateToken, updateCategoryHandler)
 router.delete('/categories/:id', authenticateToken, deleteCategoryHandler)
 
@@ -587,30 +568,6 @@ router.delete('/versions/:id', authenticateToken, deleteVersionHandler)
 
 /**
  * @openapi
- * /versions/{id}/tasks:
- *   get:
- *     tags: [Versions]
- *     summary: 获取版本下任务列表
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/id'
- *     responses:
- *       200:
- *         description: 获取成功
- *       401:
- *         $ref: '#/components/responses/Unauthorized'
- *       403:
- *         $ref: '#/components/responses/Forbidden'
- *       404:
- *         description: 版本不存在
- *       500:
- *         $ref: '#/components/responses/InternalError'
- */
-router.get('/versions/:id/tasks', authenticateToken, getTasksByVersion)
-
-/**
- * @openapi
  * /subtasks:
  *   post:
  *     tags: [SubTasks]
@@ -660,30 +617,6 @@ router.post('/subtasks', authenticateToken, createSubTaskHandler)
  *         $ref: '#/components/responses/InternalError'
  */
 router.get('/subtasks/:taskId', authenticateToken, getSubTasksHandler)
-
-/**
- * @openapi
- * /subtask/{id}:
- *   get:
- *     tags: [SubTasks]
- *     summary: 获取单个子任务
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - $ref: '#/components/parameters/id'
- *     responses:
- *       200:
- *         description: 获取成功
- *       401:
- *         $ref: '#/components/responses/Unauthorized'
- *       403:
- *         $ref: '#/components/responses/Forbidden'
- *       404:
- *         description: 子任务不存在
- *       500:
- *         $ref: '#/components/responses/InternalError'
- */
-router.get('/subtask/:id', authenticateToken, getSubTaskHandler)
 
 /**
  * @openapi
