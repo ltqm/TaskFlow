@@ -121,7 +121,7 @@ async function confirmImport() {
             </p>
             <div class="mt-2 flex items-center gap-3 text-sm">
               <a
-                href="/task-import-template-v2.xlsx"
+                href="/task-import-template.xlsx"
                 download
                 class="text-primary hover:underline"
               >

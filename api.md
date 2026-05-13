@@ -141,7 +141,7 @@
   - `fileHash`、`expiresAt`
   - `errors[]`：`rowIndex`、`field`、`reason`
   - `warnings[]`：`rowIndex`、`field`、`reason`
-  - `normalizedRows[]`：标准化后预览（含 `mainTaskTitle`、`title`、`subTaskCount`）
+  - `normalizedRows[]`：标准化后预览（含 `title`、`subTaskCount` 等）
 - `commit` 请求：JSON，必填 `importToken`、`fileHash`。
 - `commit` 返回 `data`：
   - `createdTaskCount`
@@ -169,7 +169,8 @@
 - `priority` 非 `high|medium|low`：回退为 `medium` 并给出 warning。
 - `totalPomodoros < 1` 或非法：回退为 `1` 并给出 warning。
 - `dueDate/reminderTime` 解析失败：置空并给出 warning。
-- `categoryName/versionName` 无匹配：置空并给出 warning（不阻断导入）。
+- `categoryName` 无匹配：置空并给出 warning（不阻断导入）。
+- `versionName` 无匹配：**自动创建版本**并关联，同时给出 warning。
 - 旧 `subTasks` 单列拼接格式已废弃（`| ; 换行 ::` 规则不再支持）。
 - `CSV` 仅支持 `tasks` 主表字段，不支持导入子任务。
 
@@ -187,7 +188,6 @@
 - `totalPomodoros` / `预估番茄钟`
 - `categoryName` / `分类`
 - `versionName` / `版本`
-- 若仍填写 `taskRef` / `任务引用` 列：解析时**忽略**并给出 warning（子任务仅以主任务标题关联）。
 
 #### subtasks 工作表
 
@@ -197,5 +197,5 @@
 
 ### 模板文件
 
-- 双 Sheet xlsx 模板：`frontend/public/task-import-template-v2.xlsx`
+- 双 Sheet xlsx 模板：`frontend/public/task-import-template.xlsx`
 - CSV（仅 tasks 主表）：`frontend/public/task-import-template.csv`

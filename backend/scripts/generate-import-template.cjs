@@ -67,22 +67,17 @@ async function buildWorkbook() {
 async function main() {
   const wb = await buildWorkbook()
   const outDir = path.resolve(__dirname, '../../frontend/public')
-  const targets = [
-    path.join(outDir, 'task-import-template-v2.xlsx'),
-    path.join(outDir, 'task-import-template.xlsx')
-  ]
-  for (const dest of targets) {
-    try {
-      await wb.xlsx.writeFile(dest)
+  const dest = path.join(outDir, 'task-import-template.xlsx')
+  try {
+    await wb.xlsx.writeFile(dest)
+    // eslint-disable-next-line no-console
+    console.log('Wrote:', dest)
+  } catch (err) {
+    if (err && err.code === 'EBUSY') {
       // eslint-disable-next-line no-console
-      console.log('Wrote:', dest)
-    } catch (err) {
-      if (err && err.code === 'EBUSY') {
-        // eslint-disable-next-line no-console
-        console.warn('Skip (file locked):', dest)
-      } else {
-        throw err
-      }
+      console.warn('Skip (file locked):', dest)
+    } else {
+      throw err
     }
   }
 }

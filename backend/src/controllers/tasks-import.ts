@@ -56,8 +56,6 @@ interface ImportSession {
 const importSessions = new Map<string, ImportSession>()
 
 const TASK_HEADER_ALIASES: Record<string, string> = {
-  taskRef: 'taskRef',
-  '任务引用': 'taskRef',
   title: 'title',
   '任务标题': 'title',
   '主任务标题': 'title',
@@ -248,14 +246,6 @@ function normalizeRowsFromWorkbook(workbook: XLSX.WorkBook, userId: string, file
 
     const title = (row.title || '').trim()
 
-    if ((row.taskRef || '').trim()) {
-      warnings.push({
-        rowIndex,
-        field: 'taskRef',
-        reason: '已忽略 taskRef/任务引用 列：子任务请通过「主任务标题」与 tasks 表关联'
-      })
-    }
-
     if (!title) {
       errors.push({ rowIndex, field: 'title', reason: '主任务标题不能为空' })
       return
@@ -399,7 +389,6 @@ export function precheckTaskImportHandler(req: Request, res: Response) {
       warnings,
       normalizedRows: normalizedRows.map(row => ({
         rowIndex: row.rowIndex,
-        mainTaskTitle: row.task.title,
         title: row.task.title,
         description: row.task.description,
         categoryId: row.task.categoryId,
@@ -413,7 +402,7 @@ export function precheckTaskImportHandler(req: Request, res: Response) {
         subTaskCount: row.subTasks.length
       }))
     }, canCommit ? '预检通过' : '预检完成，存在错误行')
-  } catch (error) {
+  } catch {
     return fail(res, 500, 20015, '预检失败，请检查文件格式')
   }
 }
@@ -502,7 +491,7 @@ export function commitTaskImportHandler(req: Request, res: Response) {
       skippedRelationCount,
       createdTasks
     }, '导入成功')
-  } catch (error) {
+  } catch {
     return fail(res, 500, 20094, '导入失败')
   }
 }

@@ -25,8 +25,6 @@ export interface TaskImportIssue {
 
 export interface TaskImportPrecheckRow {
   rowIndex: number
-  /** 与 tasks 表「主任务标题」一致，用于 subtasks 关联 */
-  mainTaskTitle: string
   title: string
   description: string
   categoryId: string | null
