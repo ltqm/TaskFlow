@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import type { Task } from '@/types'
+import { resolveTaskWorkflowStatus } from '@/utils/task-workflow'
 import { useTasksStore } from '@/stores/tasks'
 import { CheckCircle, Circle, Clock, Tag, Trash2, Edit3, FileText, ChevronDown, ChevronUp } from 'lucide-vue-next'
 import { useConfirm } from '@/composables/useConfirm'
@@ -36,6 +37,24 @@ const priorityLabels = {
   medium: '中',
   low: '低'
 }
+
+const workflowState = computed(() => resolveTaskWorkflowStatus(props.task))
+const workflowBadgeClass = computed(() => {
+  if (workflowState.value === 'in_progress') {
+    return 'border-transparent bg-amber-500/90 text-white'
+  }
+  return 'border-border/80 bg-secondary/90 text-foreground/85'
+})
+const workflowLabel = computed(() => {
+  switch (workflowState.value) {
+    case 'completed':
+      return '已完成'
+    case 'in_progress':
+      return '处理中'
+    default:
+      return '待处理'
+  }
+})
 
 async function toggleComplete(task: Task) {
   const nextCompleted = !task.isCompleted
@@ -82,13 +101,21 @@ function getTruncatedNotes(notes: string, maxLength: number = 50) {
       </button>
 
       <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2 mb-1">
+        <div class="flex items-center gap-2 mb-1 flex-wrap">
           <h3 
             class="font-medium truncate"
             :class="task.isCompleted ? 'text-muted-foreground line-through' : 'text-foreground'"
           >
             {{ task.title }}
           </h3>
+          <Badge
+            v-if="!task.isCompleted"
+            variant="outline"
+            class="flex-shrink-0 px-2 py-0.5 text-[10px] font-medium"
+            :class="workflowBadgeClass"
+          >
+            {{ workflowLabel }}
+          </Badge>
           <Badge
             v-if="task.priority"
             class="flex-shrink-0 px-2 py-0.5 text-[11px] text-white"

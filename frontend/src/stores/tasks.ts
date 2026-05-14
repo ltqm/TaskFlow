@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Task, Category, SubTask } from '@/types'
+import { resolveTaskWorkflowStatus } from '@/utils/task-workflow'
 import { 
   getTasks, 
   getTaskById,
@@ -22,6 +23,9 @@ export const useTasksStore = defineStore('tasks', () => {
 
   const pendingTasks = computed(() => tasks.value.filter(t => !t.isCompleted))
   const completedTasks = computed(() => tasks.value.filter(t => t.isCompleted))
+  const inProgressTasks = computed(() =>
+    tasks.value.filter(t => resolveTaskWorkflowStatus(t) === 'in_progress')
+  )
   const highPriorityTasks = computed(() => tasks.value.filter(t => t.priority === 'high' && !t.isCompleted))
 
   async function fetchTasks() {
@@ -164,6 +168,7 @@ export const useTasksStore = defineStore('tasks', () => {
     loading,
     pendingTasks,
     completedTasks,
+    inProgressTasks,
     highPriorityTasks,
     fetchTasks,
     fetchCategories,

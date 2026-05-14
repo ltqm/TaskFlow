@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import type { Task, SubTask } from '@/types'
+import { resolveTaskWorkflowStatus } from '@/utils/task-workflow'
 import { useTasksStore } from '@/stores/tasks'
 import { useVersionsStore } from '@/stores/versions'
 import {
@@ -65,6 +66,28 @@ const totalCount = computed(() => subTasks.value.length)
 const progressPercent = computed(() => {
   if (totalCount.value === 0) return 0
   return Math.round((completedCount.value / totalCount.value) * 100)
+})
+
+const workflowState = computed(() => resolveTaskWorkflowStatus(props.task))
+const workflowBadgeClass = computed(() => {
+  switch (workflowState.value) {
+    case 'completed':
+      return 'bg-green-500/20 text-green-300 ring-1 ring-green-400/30'
+    case 'in_progress':
+      return 'bg-amber-500/15 text-amber-200 ring-1 ring-amber-400/35'
+    default:
+      return 'bg-secondary text-foreground/85 ring-1 ring-border'
+  }
+})
+const workflowLabel = computed(() => {
+  switch (workflowState.value) {
+    case 'completed':
+      return '已完成'
+    case 'in_progress':
+      return '处理中'
+    default:
+      return '待处理'
+  }
 })
 
 watch(
@@ -206,9 +229,9 @@ async function deleteSubTask(subTask: SubTask) {
             </div>
             <span
               class="inline-flex rounded-full px-3 py-1 text-xs font-medium"
-              :class="task.isCompleted ? 'bg-green-500/20 text-green-300 ring-1 ring-green-400/30' : 'bg-secondary text-foreground/85 ring-1 ring-border'"
+              :class="workflowBadgeClass"
             >
-              {{ task.isCompleted ? '已完成' : '待处理' }}
+              {{ workflowLabel }}
             </span>
           </div>
 

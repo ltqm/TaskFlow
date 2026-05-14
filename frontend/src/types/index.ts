@@ -1,3 +1,5 @@
+export type TaskWorkflowStatus = 'pending' | 'in_progress' | 'completed'
+
 export interface Task {
   id: string
   title: string
@@ -16,6 +18,8 @@ export interface Task {
   createdAt: string
   updatedAt: string
   isCompleted: boolean
+  /** 后端派生：待处理 / 处理中 / 已完成 */
+  workflowStatus?: TaskWorkflowStatus
   subTasks?: SubTask[]
 }
 

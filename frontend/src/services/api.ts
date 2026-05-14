@@ -128,11 +128,41 @@ export async function getTasks(): Promise<Task[]> {
   return requestData<Task[]>(api.get('/tasks'))
 }
 
+export interface TasksPagedResult {
+  items: Task[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export async function getTasksPaged(params: {
+  page: number
+  pageSize: number
+  search?: string
+  categoryId?: string
+  priority?: string
+}): Promise<TasksPagedResult> {
+  return requestData<TasksPagedResult>(
+    api.get('/tasks', {
+      params: {
+        page: params.page,
+        pageSize: params.pageSize,
+        search: params.search?.trim() || undefined,
+        categoryId: params.categoryId?.trim() || undefined,
+        priority: params.priority && params.priority !== 'all' ? params.priority : undefined
+      }
+    })
+  )
+}
+
 export async function getTaskById(id: string): Promise<Task> {
   return requestData<Task>(api.get(`/tasks/${id}`))
 }
 
-export async function createTask(task: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'completedPomodoros' | 'isCompleted' | 'category' | 'versionName'>): Promise<Task> {
+export async function createTask(
+  task: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'completedPomodoros' | 'isCompleted' | 'category' | 'versionName' | 'workflowStatus'>
+): Promise<Task> {
   return requestData<Task>(api.post('/tasks', task))
 }
 

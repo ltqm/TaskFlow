@@ -7,11 +7,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// 系统用户
 model User {
+  /// 用户唯一 ID
   id         String     @id @db.VarChar(64)
+  /// 登录用户名
   username   String     @db.VarChar(191)
+  /// 邮箱（唯一，用于登录）
   email      String     @unique @db.VarChar(191)
+  /// 密码哈希
   password   String     @db.VarChar(255)
+  /// 注册/创建时间
   createdAt  DateTime   @map("created_at")
   categories Category[]
   versions   Version[]
@@ -20,11 +26,17 @@ model User {
   @@map("users")
 }
 
+/// 任务分类（颜色用于前端展示）
 model Category {
+  /// 分类唯一 ID
   id        String   @id @db.VarChar(64)
+  /// 分类名称
   name      String   @db.VarChar(191)
+  /// 分类颜色（如 Hex）
   color     String   @db.VarChar(32)
+  /// 所属用户 ID
   userId    String   @map("user_id") @db.VarChar(64)
+  /// 创建时间
   createdAt DateTime @map("created_at")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks     Task[]
@@ -33,12 +45,19 @@ model Category {
   @@map("categories")
 }
 
+/// 版本/迭代（任务可关联到某版本）
 model Version {
+  /// 版本唯一 ID
   id          String   @id @db.VarChar(64)
+  /// 版本名称（如 v1.0.0）
   name        String   @db.VarChar(191)
+  /// 版本说明
   description String   @db.Text
+  /// 计划发布日期（字符串存储，如 YYYY-MM-DD）
   releaseDate String   @map("release_date") @db.VarChar(32)
+  /// 所属用户 ID
   userId      String   @map("user_id") @db.VarChar(64)
+  /// 创建时间
   createdAt   DateTime @map("created_at")
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks       Task[]
@@ -47,21 +66,37 @@ model Version {
   @@map("versions")
 }
 
+/// 主任务
 model Task {
+  /// 任务唯一 ID
   id                 String    @id @db.VarChar(64)
+  /// 任务标题
   title              String    @db.VarChar(191)
+  /// 任务详细描述
   description        String    @db.Text
+  /// 所属分类 ID（可空）
   categoryId         String?   @map("category_id") @db.VarChar(64)
+  /// 所属版本 ID（可空）
   versionId          String?   @map("version_id") @db.VarChar(64)
+  /// 优先级：high / medium / low
   priority           String    @db.VarChar(16)
+  /// 截止日期（字符串存储）
   dueDate            String?   @map("due_date") @db.VarChar(128)
+  /// 提醒时间（字符串存储）
   reminderTime       String?   @map("reminder_time") @db.VarChar(128)
+  /// 标签列表（JSON 数组）
   tags               Json
+  /// 任务备注（用户在应用内填写）
   notes              String    @db.Text
+  /// 已完成番茄钟数
   completedPomodoros Int       @map("completed_pomodoros")
+  /// 预估番茄钟总数
   totalPomodoros     Int       @map("total_pomodoros")
+  /// 创建时间
   createdAt          DateTime  @map("created_at")
+  /// 主任务是否已完成（含子任务全完成时的同步）
   isCompleted        Boolean   @map("is_completed")
+  /// 所属用户 ID
   userId             String    @map("user_id") @db.VarChar(64)
   user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   category           Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
@@ -74,13 +109,21 @@ model Task {
   @@map("tasks")
 }
 
+/// 子任务（隶属于主任务）
 model SubTask {
+  /// 子任务唯一 ID
   id          String   @id @db.VarChar(64)
+  /// 所属主任务 ID
   taskId      String   @map("task_id") @db.VarChar(64)
+  /// 子任务标题
   title       String   @db.VarChar(191)
+  /// 子任务描述
   description String   @db.Text
+  /// 是否已完成
   isCompleted Boolean  @map("is_completed")
+  /// 创建时间
   createdAt   DateTime @map("created_at")
+  /// 最后更新时间
   updatedAt   DateTime @map("updated_at")
   task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
 

@@ -102,10 +102,28 @@ const swaggerDefinition: swaggerJSDoc.OAS3Definition = {
           totalPomodoros: { type: 'integer', description: '预估番茄钟总数', example: 1 },
           createdAt: { type: 'string', format: 'date-time', description: '创建时间' },
           isCompleted: { type: 'boolean', description: '是否已完成', example: false },
+          workflowStatus: {
+            type: 'string',
+            description:
+              '派生工作流状态：pending=待处理，in_progress=处理中（存在未完成子任务且至少一条子任务已完成），completed=已完成',
+            enum: ['pending', 'in_progress', 'completed'],
+            example: 'pending'
+          },
           userId: { type: 'string', description: '所属用户 ID' },
           categoryName: { type: 'string', nullable: true, description: '分类名称（展示字段）' },
           categoryColor: { type: 'string', nullable: true, description: '分类颜色（展示字段）' },
           versionName: { type: 'string', nullable: true, description: '版本名称（展示字段）' }
+        }
+      },
+      TasksListPaged: {
+        type: 'object',
+        required: ['items', 'total', 'page', 'pageSize', 'totalPages'],
+        properties: {
+          items: { type: 'array', items: { $ref: '#/components/schemas/Task' } },
+          total: { type: 'integer', description: '符合条件的总条数' },
+          page: { type: 'integer', description: '当前页码' },
+          pageSize: { type: 'integer', description: '每页条数' },
+          totalPages: { type: 'integer', description: '总页数' }
         }
       },
       Category: {

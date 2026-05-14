@@ -10,7 +10,10 @@ async function startServer() {
   const app = await createApp()
 
   const server = app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`)
+    const base = `http://localhost:${PORT}`
+    console.log(`Server running on ${base}`)
+    console.log(`Swagger 文档: ${base}/docs`)
+    console.log(`OpenAPI JSON: ${base}/docs.json`)
   })
 
   const shutdown = async () => {

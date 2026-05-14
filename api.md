@@ -57,6 +57,12 @@
 - `categoryColor`: 分类颜色（Hex），可为 `null`。
 - `versionName`: 版本名称（由 `versionId` 关联得到），可为 `null`。
 
+### 任务列表（`GET /tasks`）
+
+- **不传** `page`：`data` 为任务数组（与历史一致，供首页等全量使用）。
+- **传入** `page`（≥1）：`data` 为分页对象：`items`、`total`、`page`、`pageSize`、`totalPages`。
+- 分页可选查询：`pageSize`（默认 12，最大 100）、`search`（标题/描述模糊匹配，不区分大小写）、`categoryId`、`priority`（`high`/`medium`/`low`；不传则不过滤优先级）。
+
 ### 新增任务约束（`POST /tasks`）
 
 - `versionId` 必填：新增任务必须绑定一个已存在且属于当前用户的版本。

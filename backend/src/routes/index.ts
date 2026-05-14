@@ -127,11 +127,30 @@ router.get('/auth/user', authenticateToken, getUser)
  *   get:
  *     tags: [Tasks]
  *     summary: 获取任务列表
+ *     description: 不传 `page` 时返回当前用户全部任务（数组）；传入 `page` 时返回分页对象（items/total/page/pageSize/totalPages）。分页支持 query 参数 `search`、`categoryId`、`priority`（`high`/`medium`/`low`；不传或 `all` 表示不按优先级过滤）。
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, minimum: 1 }
+ *         description: 页码；传入则启用分页响应
+ *       - in: query
+ *         name: pageSize
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 12 }
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *         description: 标题/描述模糊搜索（不区分大小写）
+ *       - in: query
+ *         name: categoryId
+ *         schema: { type: string }
+ *       - in: query
+ *         name: priority
+ *         schema: { type: string, enum: [high, medium, low, all] }
  *     responses:
  *       200:
- *         description: 获取成功
+ *         description: 获取成功（data 为任务数组或分页对象）
  *         content:
  *           application/json:
  *             schema:

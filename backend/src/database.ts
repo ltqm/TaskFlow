@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from './db/prisma'
+import { computeWorkflowStatus, type TaskWorkflowStatus } from './utils/task-workflow'
 
 export interface User {
   id: string
@@ -53,6 +54,8 @@ export interface Task {
   isCompleted: boolean
   userId: string
 }
+
+export type TaskWithWorkflow = Task & { workflowStatus: TaskWorkflowStatus }
 
 function newId(): string {
   return Date.now().toString()
@@ -168,6 +171,15 @@ function toSubTask(s: {
     createdAt: s.createdAt.toISOString(),
     updatedAt: s.updatedAt.toISOString()
   }
+}
+
+async function enrichTaskWithWorkflow(task: Task): Promise<TaskWithWorkflow> {
+  const rows = await prisma.subTask.findMany({
+    where: { taskId: task.id },
+    select: { isCompleted: true }
+  })
+  const flags = rows.map(r => r.isCompleted)
+  return { ...task, workflowStatus: computeWorkflowStatus(task.isCompleted, flags) }
 }
 
 export async function initDatabase(): Promise<void> {
@@ -309,7 +321,7 @@ export async function deleteVersion(id: string, userId: string): Promise<boolean
   return result.count > 0
 }
 
-export async function createTask(task: Omit<Task, 'id'>): Promise<Task> {
+export async function createTask(task: Omit<Task, 'id'>): Promise<TaskWithWorkflow> {
   const row = await prisma.task.create({
     data: {
       id: newId(),
@@ -329,28 +341,107 @@ export async function createTask(task: Omit<Task, 'id'>): Promise<Task> {
       userId: task.userId
     }
   })
-  return toTask(row)
+  return enrichTaskWithWorkflow(toTask(row))
 }
 
-export async function getTasksByUserId(userId: string): Promise<Task[]> {
+export interface TaskListPageQuery {
+  page: number
+  pageSize: number
+  search?: string
+  categoryId?: string
+  /** 传 `all` 或不传表示不按优先级筛选 */
+  priority?: string
+}
+
+export async function getTasksByUserId(userId: string): Promise<TaskWithWorkflow[]> {
   const rows = await prisma.task.findMany({
     where: { userId },
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: 'desc' },
+    include: { subTasks: { select: { isCompleted: true } } }
   })
-  return rows.map(toTask)
+  return rows.map(row => {
+    const task = toTask(row)
+    const flags = row.subTasks.map(s => s.isCompleted)
+    return { ...task, workflowStatus: computeWorkflowStatus(task.isCompleted, flags) }
+  })
 }
 
-export async function getTasksByVersionId(versionId: string, userId: string): Promise<Task[]> {
+function mapRowsToTasksWithWorkflow(
+  rows: Array<{
+    subTasks: { isCompleted: boolean }[]
+  } & Parameters<typeof toTask>[0]>
+): TaskWithWorkflow[] {
+  return rows.map(row => {
+    const task = toTask(row)
+    const flags = row.subTasks.map(s => s.isCompleted)
+    return { ...task, workflowStatus: computeWorkflowStatus(task.isCompleted, flags) }
+  })
+}
+
+export async function getTasksByUserIdPaged(
+  userId: string,
+  query: TaskListPageQuery
+): Promise<{ items: TaskWithWorkflow[]; total: number }> {
+  const page = Math.max(1, Math.floor(query.page))
+  const pageSize = Math.min(100, Math.max(1, Math.floor(query.pageSize)))
+  const where: Prisma.TaskWhereInput = { userId }
+
+  const categoryId = query.categoryId?.trim()
+  if (categoryId) {
+    where.categoryId = categoryId
+  }
+
+  const priority = query.priority?.trim()
+  if (priority && priority !== 'all') {
+    where.priority = priority
+  }
+
+  const q = query.search?.trim()
+  if (q) {
+    where.OR = [
+      { title: { contains: q, mode: 'insensitive' } },
+      { description: { contains: q, mode: 'insensitive' } }
+    ]
+  }
+
+  const skip = (page - 1) * pageSize
+
+  const [total, rows] = await prisma.$transaction([
+    prisma.task.count({ where }),
+    prisma.task.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: pageSize,
+      include: { subTasks: { select: { isCompleted: true } } }
+    })
+  ])
+
+  return { items: mapRowsToTasksWithWorkflow(rows), total }
+}
+
+export async function getTasksByVersionId(versionId: string, userId: string): Promise<TaskWithWorkflow[]> {
   const rows = await prisma.task.findMany({
     where: { versionId, userId },
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: 'desc' },
+    include: { subTasks: { select: { isCompleted: true } } }
   })
-  return rows.map(toTask)
+  return rows.map(row => {
+    const task = toTask(row)
+    const flags = row.subTasks.map(s => s.isCompleted)
+    return { ...task, workflowStatus: computeWorkflowStatus(task.isCompleted, flags) }
+  })
 }
 
-export async function getTaskById(id: string, userId: string): Promise<Task | undefined> {
-  const row = await prisma.task.findFirst({ where: { id, userId } })
-  return row ? toTask(row) : undefined
+export async function getTaskById(id: string, userId: string): Promise<TaskWithWorkflow | undefined> {
+  const row = await prisma.task.findFirst({
+    where: { id, userId },
+    include: { subTasks: { select: { isCompleted: true } } }
+  })
+  if (!row) return undefined
+  const task = toTask(row)
+  const flags = row.subTasks.map(s => s.isCompleted)
+  return { ...task, workflowStatus: computeWorkflowStatus(task.isCompleted, flags) }
 }
 
 async function syncTaskCompletedWithSubTasksTx(tx: Prisma.TransactionClient, taskId: string): Promise<void> {
@@ -372,7 +463,11 @@ async function syncTaskCompletedWithSubTasksTx(tx: Prisma.TransactionClient, tas
   })
 }
 
-export async function updateTask(id: string, userId: string, updates: Partial<Task>): Promise<Task | undefined> {
+export async function updateTask(
+  id: string,
+  userId: string,
+  updates: Partial<Task>
+): Promise<TaskWithWorkflow | undefined> {
   const existing = await prisma.task.findFirst({ where: { id, userId } })
   if (!existing) return undefined
 
@@ -393,10 +488,10 @@ export async function updateTask(id: string, userId: string, updates: Partial<Ta
 
   const cascadeCompleteChildren = updates.isCompleted === true
   if (Object.keys(data).length === 0 && !cascadeCompleteChildren) {
-    return toTask(existing)
+    return enrichTaskWithWorkflow(toTask(existing))
   }
 
-  return prisma.$transaction(async tx => {
+  const updated = await prisma.$transaction(async tx => {
     if (cascadeCompleteChildren) {
       await tx.subTask.updateMany({
         where: { taskId: id },
@@ -413,6 +508,7 @@ export async function updateTask(id: string, userId: string, updates: Partial<Ta
     })
     return toTask(row)
   })
+  return enrichTaskWithWorkflow(updated)
 }
 
 export async function deleteTask(id: string, userId: string): Promise<boolean> {

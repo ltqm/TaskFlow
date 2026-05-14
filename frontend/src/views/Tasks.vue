@@ -2,14 +2,26 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import type { DateValue } from '@internationalized/date'
 import { getLocalTimeZone, parseDate } from '@internationalized/date'
+import { watchDebounced } from '@vueuse/core'
 import { useTasksStore } from '@/stores/tasks'
 import { useVersionsStore } from '@/stores/versions'
 import TaskCard from '@/components/TaskCard.vue'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
 import TaskImportModal from '@/components/task-import/TaskImportModal.vue'
-import { Plus, Search, Filter, X, Tag, Clock, AlertCircle, Calendar as CalendarIcon } from 'lucide-vue-next'
+import {
+  Plus,
+  Search,
+  Filter,
+  X,
+  Tag,
+  Clock,
+  AlertCircle,
+  Calendar as CalendarIcon,
+  Loader2
+} from 'lucide-vue-next'
 import type { Task } from '@/types'
 import type { TaskImportCommitResult } from '@/services/api'
+import { getTasksPaged } from '@/services/api'
 import { toast } from 'vue-sonner'
 import Button from '@/components/ui/button/Button.vue'
 import Calendar from '@/components/ui/calendar/Calendar.vue'
@@ -19,6 +31,14 @@ import PopoverContent from '@/components/ui/popover/PopoverContent.vue'
 import PopoverTrigger from '@/components/ui/popover/PopoverTrigger.vue'
 import Textarea from '@/components/ui/textarea/Textarea.vue'
 import Label from '@/components/ui/label/Label.vue'
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPageSize,
+  PaginationPrevious
+} from '@/components/ui/pagination'
 
 const tasksStore = useTasksStore()
 const versionsStore = useVersionsStore()
@@ -62,34 +82,68 @@ const dueDateLabel = computed(() => {
   return dueDateValue.value.toDate(getLocalTimeZone()).toLocaleDateString('zh-CN')
 })
 
-const filteredTasks = computed(() => {
-  let result = tasksStore.tasks
+const pagedTasks = ref<Task[]>([])
+const listTotal = ref(0)
+const listPage = ref(1)
+const listPageSize = ref(12)
+const listTotalPages = ref(1)
+const listLoading = ref(false)
 
-  if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase()
-    result = result.filter(task => 
-      task.title.toLowerCase().includes(query) ||
-      task.description.toLowerCase().includes(query) ||
-      task.tags.some(tag => tag.toLowerCase().includes(query))
-    )
-  }
-
-  if (selectedCategory.value) {
-    result = result.filter(task => task.categoryId === selectedCategory.value)
-  }
-
-  if (selectedPriority.value !== 'all') {
-    result = result.filter(task => task.priority === selectedPriority.value)
-  }
-
-  return result.sort((a, b) => {
-    const priorityOrder = { high: 0, medium: 1, low: 2 }
-    if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
-      return priorityOrder[a.priority] - priorityOrder[b.priority]
+async function loadPaged() {
+  listLoading.value = true
+  try {
+    const res = await getTasksPaged({
+      page: listPage.value,
+      pageSize: listPageSize.value,
+      search: searchQuery.value.trim() || undefined,
+      categoryId: selectedCategory.value || undefined,
+      priority: selectedPriority.value
+    })
+    pagedTasks.value = res.items
+    listTotal.value = res.total
+    listTotalPages.value = res.totalPages
+    if (listPage.value > res.totalPages && res.totalPages >= 1) {
+      listPage.value = res.totalPages
+      const res2 = await getTasksPaged({
+        page: listPage.value,
+        pageSize: listPageSize.value,
+        search: searchQuery.value.trim() || undefined,
+        categoryId: selectedCategory.value || undefined,
+        priority: selectedPriority.value
+      })
+      pagedTasks.value = res2.items
+      listTotal.value = res2.total
+      listTotalPages.value = res2.totalPages
     }
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  })
+  } catch (error) {
+    console.error('Failed to load tasks page:', error)
+    toast.error('加载任务列表失败')
+  } finally {
+    listLoading.value = false
+  }
+}
+
+watch(listPage, () => {
+  void loadPaged()
 })
+
+watch(listPageSize, (_n, o) => {
+  if (o === undefined) return
+  if (listPage.value !== 1) listPage.value = 1
+  else void loadPaged()
+})
+
+watchDebounced(
+  [searchQuery, selectedCategory, selectedPriority],
+  () => {
+    if (listPage.value !== 1) {
+      listPage.value = 1
+    } else {
+      void loadPaged()
+    }
+  },
+  { debounce: 350 }
+)
 
 const categoryOptions = computed(() => [
   { id: '', name: '所有分类' },
@@ -145,10 +199,12 @@ function openDetailModal(task: Task) {
 function closeDetailModal() {
   showDetailModal.value = false
   viewingTask.value = null
+  void loadPaged()
 }
 
 function onViewingTaskUpdated(task: Task) {
   viewingTask.value = task
+  void loadPaged()
 }
 
 function openImportModal() {
@@ -222,6 +278,8 @@ async function handleSubmit() {
     }
     closeModal()
     toast.success(isEditing.value ? '任务修改成功' : '任务创建成功')
+    void tasksStore.fetchTasks()
+    void loadPaged()
   } catch (error) {
     console.error('Failed to save task:', error)
     toast.error('保存任务失败')
@@ -246,7 +304,17 @@ function handleDueDateSelect(value: DateValue | undefined) {
 
 async function handleImportSuccess(result: TaskImportCommitResult) {
   await tasksStore.fetchTasks()
+  listPage.value = 1
+  await loadPaged()
   toast.success(`已导入 ${result.createdTaskCount} 条任务，子任务 ${result.createdSubtaskCount} 条`)
+}
+
+function goPrevPage() {
+  if (listPage.value > 1) listPage.value -= 1
+}
+
+function goNextPage() {
+  if (listPage.value < listTotalPages.value) listPage.value += 1
 }
 
 onMounted(async () => {
@@ -256,6 +324,7 @@ onMounted(async () => {
   if (!versionsStore.versions.length) {
     await versionsStore.fetchVersions()
   }
+  await loadPaged()
 })
 </script>
 
@@ -285,55 +354,88 @@ onMounted(async () => {
     </div>
 
     <div class="mb-6 rounded-xl border border-border/80 bg-card p-4">
-      <div class="flex items-center gap-4">
-        <div class="flex-1 relative">
-          <Search class="absolute left-3 top-1/2 w-5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            v-model="searchQuery"
-            type="text"
-            placeholder="搜索任务..."
-            class="h-10 rounded-lg bg-secondary pl-10"
-          />
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center gap-4">
+          <div class="flex-1 relative">
+            <Search class="absolute left-3 top-1/2 w-5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              v-model="searchQuery"
+              type="text"
+              placeholder="搜索标题或描述..."
+              class="h-10 rounded-lg bg-secondary pl-10"
+            />
+          </div>
+          <div class="flex items-center gap-2">
+            <Filter class="w-5 h-5 text-muted-foreground" />
+            <select
+              v-model="selectedCategory"
+              class="h-10 rounded-lg border border-input bg-secondary px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option v-for="cat in categoryOptions" :key="cat.id" :value="cat.id">
+                {{ cat.name }}
+              </option>
+            </select>
+            <select
+              v-model="selectedPriority"
+              class="h-10 rounded-lg border border-input bg-secondary px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option v-for="p in priorityOptions" :key="p.value" :value="p.value">
+                {{ p.label }}
+              </option>
+            </select>
+          </div>
         </div>
-        <div class="flex items-center gap-2">
-          <Filter class="w-5 h-5 text-muted-foreground" />
-          <select
-            v-model="selectedCategory"
-            class="h-10 rounded-lg border border-input bg-secondary px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option v-for="cat in categoryOptions" :key="cat.id" :value="cat.id">
-              {{ cat.name }}
-            </option>
-          </select>
-          <select
-            v-model="selectedPriority"
-            class="h-10 rounded-lg border border-input bg-secondary px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option v-for="p in priorityOptions" :key="p.value" :value="p.value">
-              {{ p.label }}
-            </option>
-          </select>
-        </div>
+        <p class="text-xs text-muted-foreground">
+          列表为服务端分页；搜索匹配标题与描述，分类与优先级在服务端筛选。
+        </p>
       </div>
     </div>
 
-    <div v-if="filteredTasks.length === 0" class="rounded-xl border border-border/80 bg-card p-12 text-center">
+    <div v-if="listLoading" class="flex min-h-[280px] flex-col items-center justify-center rounded-xl border border-border/80 bg-card">
+      <Loader2 class="h-10 w-10 animate-spin text-muted-foreground" />
+      <p class="mt-3 text-sm text-muted-foreground">加载中...</p>
+    </div>
+
+    <div v-else-if="listTotal === 0" class="rounded-xl border border-border/80 bg-card p-12 text-center">
       <div class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-secondary">
         <Tag class="w-10 h-10 text-muted-foreground" />
       </div>
       <h3 class="mb-2 text-xl font-semibold text-foreground">暂无任务</h3>
-      <p class="text-muted-foreground">点击右上角按钮创建你的第一个任务</p>
+      <p class="text-muted-foreground">当前筛选条件下没有任务，或点击右上角创建任务</p>
     </div>
 
-    <div v-else class="grid grid-cols-3 gap-4">
-      <TaskCard
-        v-for="task in filteredTasks"
-        :key="task.id"
-        :task="task"
-        @edit="editTask"
-        @view="openDetailModal"
-      />
-    </div>
+    <template v-else>
+      <div class="grid grid-cols-3 gap-4">
+        <TaskCard
+          v-for="task in pagedTasks"
+          :key="task.id"
+          :task="task"
+          @edit="editTask"
+          @view="openDetailModal"
+        />
+      </div>
+
+      <Pagination class="mt-8 border-t border-border/80 pt-6">
+        <PaginationContent class="w-full flex-wrap items-center justify-between gap-3">
+          <PaginationItem class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
+            <span>共 {{ listTotal }} 条</span>
+            <span class="hidden sm:inline" aria-hidden="true">·</span>
+            <span class="tabular-nums">第 {{ listPage }} / {{ listTotalPages }} 页</span>
+            <PaginationPageSize v-model="listPageSize" class="sm:ml-0" />
+          </PaginationItem>
+          <PaginationItem class="flex shrink-0 items-center gap-1">
+            <PaginationPrevious
+              :disabled="listPage <= 1 || listLoading"
+              @click="goPrevPage"
+            />
+            <PaginationNext
+              :disabled="listPage >= listTotalPages || listLoading"
+              @click="goNextPage"
+            />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    </template>
 
     <Teleport to="body">
       <div v-if="showModal" class="z-overlay-modal fixed inset-0 flex items-center justify-center bg-black/82 px-4 py-6 backdrop-blur-sm">

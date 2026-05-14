@@ -1,32 +1,88 @@
 import { Request, Response } from 'express'
 import {
   getTasksByUserId,
+  getTasksByUserIdPaged,
   getTaskById,
   createTask,
   updateTask,
   deleteTask as dbDeleteTask,
   getCategoriesByUserId,
-  getVersionsByUserId
+  getVersionsByUserId,
+  type TaskWithWorkflow
 } from '../database'
+import type { Category, Version } from '../database'
 import { fail, ok } from '../utils/response'
+
+function firstQuery(v: unknown): string | undefined {
+  if (v === undefined || v === null) return undefined
+  if (Array.isArray(v)) return firstQuery(v[0])
+  const s = String(v).trim()
+  return s === '' ? undefined : s
+}
+
+function parsePositiveInt(v: unknown, fallback: number, max?: number): number {
+  const raw = firstQuery(v)
+  const n = raw === undefined ? Number.NaN : parseInt(raw, 10)
+  if (Number.isNaN(n) || n < 1) return fallback
+  if (max !== undefined) return Math.min(max, n)
+  return n
+}
+
+function formatTasksWithRelations(
+  tasks: TaskWithWorkflow[],
+  categories: Category[],
+  versions: Version[]
+) {
+  return tasks.map(task => {
+    const category = categories.find(c => c.id === task.categoryId)
+    const version = versions.find(v => v.id === task.versionId)
+    return {
+      ...task,
+      categoryName: category?.name || null,
+      categoryColor: category?.color || null,
+      versionName: version?.name || null
+    }
+  })
+}
 
 export async function getAllTasks(req: Request, res: Response) {
   try {
     const userId = (req as any).userId
-    const tasks = await getTasksByUserId(userId)
     const categories = await getCategoriesByUserId(userId)
     const versions = await getVersionsByUserId(userId)
 
-    const formattedTasks = tasks.map(task => {
-      const category = categories.find(c => c.id === task.categoryId)
-      const version = versions.find(v => v.id === task.versionId)
-      return {
-        ...task,
-        categoryName: category?.name || null,
-        categoryColor: category?.color || null,
-        versionName: version?.name || null
-      }
-    })
+    const pageRaw = firstQuery(req.query.page)
+    const usePaging = pageRaw !== undefined
+
+    if (usePaging) {
+      const page = parsePositiveInt(req.query.page, 1)
+      const pageSize = parsePositiveInt(req.query.pageSize, 12, 100)
+      const search = firstQuery(req.query.search)
+      const categoryId = firstQuery(req.query.categoryId)
+      const priority = firstQuery(req.query.priority) ?? 'all'
+
+      const { items, total } = await getTasksByUserIdPaged(userId, {
+        page,
+        pageSize,
+        search,
+        categoryId,
+        priority
+      })
+
+      const formatted = formatTasksWithRelations(items, categories, versions)
+      const totalPages = total === 0 ? 1 : Math.ceil(total / pageSize)
+
+      return ok(res, {
+        items: formatted,
+        total,
+        page,
+        pageSize,
+        totalPages
+      })
+    }
+
+    const tasks = await getTasksByUserId(userId)
+    const formattedTasks = formatTasksWithRelations(tasks, categories, versions)
 
     return ok(res, formattedTasks)
   } catch (error) {
