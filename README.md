@@ -91,6 +91,8 @@ set SMOKE_BASE_URL=http://127.0.0.1:3000&& npm run smoke
 1. **backend** / **frontend**：各自 `npm ci` 与 `npm run build`（纯编译，不连库）。
 2. **integration**（在以上两个 job 均成功后）：启动 **PostgreSQL 16** 服务容器，设置 `DATABASE_URL` / `JWT_SECRET` / `PORT=8089`，在 `backend` 内 `npm ci`、`npm run build`、`prisma migrate deploy`，后台启动 `node dist/server.js`，用根路径 JSON 轮询就绪后，在仓库根执行 `SMOKE_BASE_URL=... node scripts/smoke.mjs`（与本地 `npm run smoke` 同源脚本）。
 
+可执行步骤写在仓库根目录 [`ci/`](ci/)（如 `github-actions-integration.sh`）；**日常改 CI 逻辑优先改这些脚本**，少动 `.github/workflows/ci.yml`（用 PAT 推送时，修改 workflow 文件需要 token 具备 `workflow` 权限）。
+
 > 说明：integration 仅验证「迁移可应用 + API 可启动 + 根路径与 OpenAPI 可读」，**不**跑浏览器端到端或登录业务流；完整联调仍依赖本地或预发环境。
 
 ## 故障排查
