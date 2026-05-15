@@ -98,7 +98,8 @@ const upcomingTasks = computed(() => {
           />
           <Card v-if="todayTasks.length === 0" class="p-8 text-center">
             <CheckCircle class="w-12 h-12 text-green-500 mx-auto mb-4" />
-            <p class="text-muted-foreground">今日任务已完成！</p>
+            <p class="text-muted-foreground">暂无今天到期或已逾期的待办</p>
+            <p class="mt-1 text-sm text-muted-foreground/80">为任务设置截止日期后，将在此显示</p>
           </Card>
         </div>
       </div>

@@ -15,6 +15,7 @@ export const useVersionsStore = defineStore('versions', () => {
       versions.value = await getVersions()
     } catch (error) {
       console.error('Failed to fetch versions:', error)
+      throw error
     } finally {
       loading.value = false
     }
@@ -66,6 +67,7 @@ export const useVersionsStore = defineStore('versions', () => {
     } catch (error) {
       console.error('Failed to fetch version tasks:', error)
       versionTasks.value = []
+      throw error
     } finally {
       loading.value = false
     }

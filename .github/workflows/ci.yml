@@ -1,0 +1,96 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  # 在双端编译通过后：起 PostgreSQL → migrate → 启动 API → 根目录 smoke
+  integration:
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: task_reminder
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d task_reminder"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/task_reminder?schema=public
+      JWT_SECRET: ci-jwt-secret-for-github-actions-only
+      PORT: '8089'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend & migrate
+        working-directory: backend
+        run: |
+          npm ci
+          npm run build
+          npx prisma migrate deploy
+      - name: Start API, wait, smoke, stop
+        shell: bash
+        working-directory: backend
+        run: |
+          set -eu
+          node dist/server.js &
+          PID=$!
+          cleanup() { kill "$PID" 2>/dev/null || true; }
+          trap cleanup EXIT
+          for i in $(seq 1 90); do
+            if out=$(curl -sf "http://127.0.0.1:8089/" 2>/dev/null) && echo "$out" | grep -q '"code":0'; then
+              echo "Backend ready after ${i}s"
+              break
+            fi
+            if [[ "$i" -eq 90 ]]; then
+              echo "Timeout waiting for backend"
+              exit 1
+            fi
+            sleep 1
+          done
+          cd "$GITHUB_WORKSPACE"
+          SMOKE_BASE_URL=http://127.0.0.1:8089 node scripts/smoke.mjs

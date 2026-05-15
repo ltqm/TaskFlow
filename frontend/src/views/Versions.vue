@@ -7,6 +7,7 @@ import { Plus, Search, X, Calendar as CalendarIcon, FileText, Trash2, Edit3, Che
 import type { Version, Task } from '@/types'
 import { useConfirm } from '@/composables/useConfirm'
 import { toast } from 'vue-sonner'
+import { formatApiError } from '@/utils/http-error'
 import Button from '@/components/ui/button/Button.vue'
 import TaskCard from '@/components/TaskCard.vue'
 import TaskDetailModal from '@/components/TaskDetailModal.vue'
@@ -51,7 +52,11 @@ const releaseDateLabel = computed(() => {
 })
 
 onMounted(async () => {
-  await versionsStore.fetchVersions()
+  try {
+    await versionsStore.fetchVersions()
+  } catch (error) {
+    toast.error(formatApiError(error))
+  }
 })
 
 function openModal(version?: Version) {
@@ -115,7 +120,7 @@ async function handleSubmit() {
     toast.success(isEditing.value ? '版本修改成功' : '版本创建成功')
   } catch (error) {
     console.error('Failed to save version:', error)
-    toast.error('保存失败，请重试')
+    toast.error(formatApiError(error))
   }
 }
 
@@ -126,8 +131,22 @@ async function deleteVersion(version: Version) {
     confirmText: '删除'
   })
   if (ok) {
-    await versionsStore.deleteVersionById(version.id)
-    toast.success('版本已删除')
+    try {
+      await versionsStore.deleteVersionById(version.id)
+      toast.success('版本已删除')
+    } catch (error) {
+      console.error('Failed to delete version:', error)
+      toast.error(formatApiError(error))
+    }
+  }
+}
+
+async function onSelectVersion(version: Version) {
+  try {
+    await versionsStore.selectVersion(version)
+  } catch (error) {
+    console.error('Failed to load version tasks:', error)
+    toast.error(formatApiError(error))
   }
 }
 
@@ -188,7 +207,7 @@ async function handleTaskToggleComplete(_task: Task, isCompleted: boolean) {
 
           <div class="max-h-[calc(100vh-250px)] overflow-y-auto">
             <div v-for="version in versionsStore.versions" :key="version.id"
-              @click="versionsStore.selectVersion(version)"
+              @click="onSelectVersion(version)"
               class="cursor-pointer border-b border-border/60 p-4 transition-colors"
               :class="versionsStore.selectedVersion?.id === version.id ? 'border-l-4 border-l-primary bg-primary/15' : 'hover:bg-secondary/60'">
               <div class="flex items-center justify-between">

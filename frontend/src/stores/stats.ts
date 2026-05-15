@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useTimerStore } from './timer'
+import { startOfWeekMonday, toLocalYMD } from '@/utils/calendar-week'
 
 export interface DailyStats {
   date: string
@@ -7,44 +9,104 @@ export interface DailyStats {
   minutes: number
 }
 
-export const useStatsStore = defineStore('stats', () => {
-  const weeklyStats = ref<DailyStats[]>([
-    { date: '周一', pomodoros: 5, minutes: 125 },
-    { date: '周二', pomodoros: 3, minutes: 75 },
-    { date: '周三', pomodoros: 6, minutes: 150 },
-    { date: '周四', pomodoros: 4, minutes: 100 },
-    { date: '周五', pomodoros: 7, minutes: 175 },
-    { date: '周六', pomodoros: 2, minutes: 50 },
-    { date: '周日', pomodoros: 4, minutes: 100 }
-  ])
+const STORAGE_KEY = 'pomodoro_daily_log_v1'
 
-  const monthlyStats = ref<DailyStats[]>([
-    { date: '第1周', pomodoros: 22, minutes: 550 },
-    { date: '第2周', pomodoros: 28, minutes: 700 },
-    { date: '第3周', pomodoros: 18, minutes: 450 },
-    { date: '第4周', pomodoros: 24, minutes: 600 }
-  ])
+function loadLog(): Record<string, { p: number; m: number }> {
+  if (typeof localStorage === 'undefined') return {}
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return {}
+    const o = JSON.parse(raw) as unknown
+    if (!o || typeof o !== 'object') return {}
+    const out: Record<string, { p: number; m: number }> = {}
+    for (const [k, v] of Object.entries(o as Record<string, unknown>)) {
+      if (!v || typeof v !== 'object') continue
+      const rec = v as Record<string, unknown>
+      const p = Number(rec.p)
+      const m = Number(rec.m)
+      out[k] = { p: Number.isFinite(p) ? p : 0, m: Number.isFinite(m) ? m : 0 }
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function saveLog(log: Record<string, { p: number; m: number }>) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(log))
+  } catch {
+    // ignore quota
+  }
+}
+
+export const useStatsStore = defineStore('stats', () => {
+  /** 递增以使基于 localStorage 的统计参与响应式更新 */
+  const logVersion = ref(0)
+
+  const weeklyStats = computed((): DailyStats[] => {
+    logVersion.value
+    const log = loadLog()
+    const labels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+    const monday = startOfWeekMonday(new Date())
+    return labels.map((label, i) => {
+      const day = new Date(monday)
+      day.setDate(monday.getDate() + i)
+      const key = toLocalYMD(day)
+      const e = log[key]
+      return { date: label, pomodoros: e?.p ?? 0, minutes: e?.m ?? 0 }
+    })
+  })
+
+  const monthlyStats = computed((): DailyStats[] => {
+    logVersion.value
+    const log = loadLog()
+    const labels = ['第1周', '第2周', '第3周', '第4周']
+    const baseMonday = startOfWeekMonday(new Date())
+    return labels.map((label, wi) => {
+      const monday = new Date(baseMonday)
+      monday.setDate(baseMonday.getDate() - (3 - wi) * 7)
+      let pomodoros = 0
+      let minutes = 0
+      for (let d = 0; d < 7; d++) {
+        const day = new Date(monday)
+        day.setDate(monday.getDate() + d)
+        const e = log[toLocalYMD(day)]
+        if (e) {
+          pomodoros += e.p
+          minutes += e.m
+        }
+      }
+      return { date: label, pomodoros, minutes }
+    })
+  })
 
   const todayStats = computed(() => {
-    const today = weeklyStats.value[new Date().getDay() - 1] || weeklyStats.value[6]
+    logVersion.value
+    const log = loadLog()
+    const key = toLocalYMD(new Date())
+    const e = log[key]
+    const pomodoros = e?.p ?? 0
+    const minutes = e?.m ?? 0
     return {
-      pomodoros: today.pomodoros,
-      minutes: today.minutes,
-      formattedTime: formatMinutes(today.minutes)
+      pomodoros,
+      minutes,
+      formattedTime: formatMinutes(minutes)
     }
   })
 
-  const totalWeeklyPomodoros = computed(() => {
-    return weeklyStats.value.reduce((sum, day) => sum + day.pomodoros, 0)
-  })
+  const totalWeeklyPomodoros = computed(() =>
+    weeklyStats.value.reduce((sum, day) => sum + day.pomodoros, 0)
+  )
 
-  const totalWeeklyMinutes = computed(() => {
-    return weeklyStats.value.reduce((sum, day) => sum + day.minutes, 0)
-  })
+  const totalWeeklyMinutes = computed(() =>
+    weeklyStats.value.reduce((sum, day) => sum + day.minutes, 0)
+  )
 
-  const averageDailyMinutes = computed(() => {
-    return Math.round(totalWeeklyMinutes.value / 7)
-  })
+  const averageDailyMinutes = computed(() =>
+    Math.round(totalWeeklyMinutes.value / 7)
+  )
 
   function formatMinutes(minutes: number): string {
     const hours = Math.floor(minutes / 60)
@@ -55,12 +117,18 @@ export const useStatsStore = defineStore('stats', () => {
     return `${mins}分钟`
   }
 
+  /** 完成一个工作番茄后调用；按本地日写入 localStorage，与当前计时器工作时长一致 */
   function addPomodoro() {
-    const dayIndex = new Date().getDay() - 1
-    if (weeklyStats.value[dayIndex]) {
-      weeklyStats.value[dayIndex].pomodoros++
-      weeklyStats.value[dayIndex].minutes += 25
-    }
+    const timer = useTimerStore()
+    const mins = timer.workDuration
+    const log = loadLog()
+    const key = toLocalYMD(new Date())
+    const cur = log[key] || { p: 0, m: 0 }
+    cur.p += 1
+    cur.m += mins
+    log[key] = cur
+    saveLog(log)
+    logVersion.value++
   }
 
   return {

@@ -4,8 +4,7 @@ import { useTasksStore } from './tasks'
 
 export const useRemindersStore = defineStore('reminders', () => {
   const tasksStore = useTasksStore()
-  
-  const unreadCount = ref(3)
+
   const dismissedReminders = ref<Set<string>>(new Set())
 
   const expiredTasks = computed(() => {
@@ -36,39 +35,39 @@ export const useRemindersStore = defineStore('reminders', () => {
     return [...expiredTasks.value, ...upcomingTasks.value]
   })
 
+  const unreadCount = computed(() => allReminders.value.length)
+
   function dismissReminder(taskId: string) {
-    dismissedReminders.value.add(taskId)
-    updateUnreadCount()
+    dismissedReminders.value = new Set([...dismissedReminders.value, taskId])
   }
 
   function restoreReminder(taskId: string) {
-    dismissedReminders.value.delete(taskId)
-    updateUnreadCount()
+    const next = new Set(dismissedReminders.value)
+    next.delete(taskId)
+    dismissedReminders.value = next
   }
 
   function dismissAll() {
+    const next = new Set(dismissedReminders.value)
     allReminders.value.forEach(task => {
-      dismissedReminders.value.add(task.id)
+      next.add(task.id)
     })
-    updateUnreadCount()
+    dismissedReminders.value = next
   }
 
   function restoreAll() {
-    dismissedReminders.value.clear()
-    updateUnreadCount()
-  }
-
-  function updateUnreadCount() {
-    unreadCount.value = allReminders.value.length
+    dismissedReminders.value = new Set()
   }
 
   function markTaskComplete(taskId: string) {
     tasksStore.updateTaskById(taskId, { isCompleted: true })
-    updateUnreadCount()
   }
+
+  const hasDismissed = computed(() => dismissedReminders.value.size > 0)
 
   return {
     unreadCount,
+    hasDismissed,
     expiredTasks,
     upcomingTasks,
     allReminders,

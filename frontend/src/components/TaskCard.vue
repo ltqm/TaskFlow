@@ -2,10 +2,12 @@
 import { ref, computed } from 'vue'
 import type { Task } from '@/types'
 import { resolveTaskWorkflowStatus } from '@/utils/task-workflow'
+import { resolveTaskCategoryLabel } from '@/utils/task-display'
 import { useTasksStore } from '@/stores/tasks'
-import { CheckCircle, Circle, Clock, Tag, Trash2, Edit3, FileText, ChevronDown, ChevronUp } from 'lucide-vue-next'
+import { CheckCircle, Circle, Clock, Tag, Trash2, Edit3, FileText, ChevronDown, ChevronUp, GitBranch } from 'lucide-vue-next'
 import { useConfirm } from '@/composables/useConfirm'
 import { toast } from 'vue-sonner'
+import { formatApiError } from '@/utils/http-error'
 import Button from '@/components/ui/button/Button.vue'
 import Badge from '@/components/ui/badge/Badge.vue'
 
@@ -45,6 +47,10 @@ const workflowBadgeClass = computed(() => {
   }
   return 'border-border/80 bg-secondary/90 text-foreground/85'
 })
+const categoryLabel = computed(() =>
+  resolveTaskCategoryLabel(props.task, tasksStore.categories)
+)
+
 const workflowLabel = computed(() => {
   switch (workflowState.value) {
     case 'completed':
@@ -58,8 +64,13 @@ const workflowLabel = computed(() => {
 
 async function toggleComplete(task: Task) {
   const nextCompleted = !task.isCompleted
-  await tasksStore.updateTaskById(task.id, { isCompleted: nextCompleted })
-  emit('toggleComplete', task, nextCompleted)
+  try {
+    await tasksStore.updateTaskById(task.id, { isCompleted: nextCompleted })
+    emit('toggleComplete', task, nextCompleted)
+  } catch (error) {
+    console.error('Failed to toggle task:', error)
+    toast.error(formatApiError(error))
+  }
 }
 
 async function deleteTask(task: Task) {
@@ -68,9 +79,13 @@ async function deleteTask(task: Task) {
     description: '确定要删除这个任务吗？此操作不可撤销。',
     confirmText: '删除'
   })
-  if (ok) {
+  if (!ok) return
+  try {
     await tasksStore.deleteTaskById(task.id)
     toast.success('任务已删除')
+  } catch (error) {
+    console.error('Failed to delete task:', error)
+    toast.error(formatApiError(error))
   }
 }
 
@@ -86,7 +101,7 @@ function getTruncatedNotes(notes: string, maxLength: number = 50) {
 
 <template>
   <div 
-    class="cursor-pointer rounded-xl border border-border/80 bg-card p-4 transition-all hover:border-border"
+    class="group cursor-pointer rounded-xl border border-border/80 bg-card p-4 transition-all hover:border-border"
     :class="{ 'opacity-60': task.isCompleted }"
     @click="emit('view', task)"
   >
@@ -152,12 +167,12 @@ function getTruncatedNotes(notes: string, maxLength: number = 50) {
         </div>
 
         <div class="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-          <span v-if="task.category" class="flex items-center gap-1">
+          <span v-if="categoryLabel !== '未分类'" class="flex items-center gap-1">
             <Tag class="w-3 h-3" />
-            {{ task.category }}
+            {{ categoryLabel }}
           </span>
           <span v-if="task.versionName" class="flex items-center gap-1">
-            <Tag class="w-3 h-3 text-purple-400" />
+            <GitBranch class="h-3 w-3 shrink-0 text-purple-400" />
             {{ task.versionName }}
           </span>
           <span v-if="task.dueDate" class="flex items-center gap-1">
@@ -181,7 +196,7 @@ function getTruncatedNotes(notes: string, maxLength: number = 50) {
 
       <div
         v-if="props.allowManage"
-        class="flex items-center gap-1 opacity-0 hover:opacity-100 transition-opacity flex-shrink-0"
+        class="flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
       >
         <Button
           @click.stop="emit('edit', task)"

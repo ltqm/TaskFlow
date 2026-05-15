@@ -5,6 +5,9 @@ export interface Task {
   title: string
   description: string
   category?: string
+  /** 后端列表/详情派生，与 swagger 的 categoryName 一致 */
+  categoryName?: string | null
+  categoryColor?: string | null
   categoryId: string | null
   versionId: string | null
   versionName?: string | null

@@ -7,6 +7,7 @@ import Button from '@/components/ui/button/Button.vue'
 import Input from '@/components/ui/input/Input.vue'
 import Label from '@/components/ui/label/Label.vue'
 import Card from '@/components/ui/card/Card.vue'
+import { formatApiError } from '@/utils/http-error'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -41,9 +42,7 @@ async function handleSubmit() {
     }
     router.push('/')
   } catch (err: unknown) {
-    const message = (err as { message?: string; response?: { data?: { msg?: string } } })?.message
-      || (err as { response?: { data?: { msg?: string } } })?.response?.data?.msg
-    error.value = message || '操作失败，请重试'
+    error.value = formatApiError(err)
   }
 }
 </script>

@@ -1,0 +1,14 @@
+{
+  "name": "task-reminder-demo",
+  "private": true,
+  "description": "全栈任务/番茄钟演示 — 根脚本仅用于本地校验与文档入口，依赖安装仍在 backend/ 与 frontend/ 分别执行",
+  "scripts": {
+    "smoke": "node scripts/smoke.mjs",
+    "build:backend": "npm run build --prefix backend",
+    "build:frontend": "npm run build --prefix frontend",
+    "build:all": "npm run build:backend && npm run build:frontend"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

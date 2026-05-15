@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import type { DateValue } from '@internationalized/date'
 import { getLocalTimeZone, parseDate } from '@internationalized/date'
-import { watchDebounced } from '@vueuse/core'
+import { watchDebounced, onKeyStroke } from '@vueuse/core'
 import { useTasksStore } from '@/stores/tasks'
 import { useVersionsStore } from '@/stores/versions'
 import TaskCard from '@/components/TaskCard.vue'
@@ -17,12 +18,15 @@ import {
   Clock,
   AlertCircle,
   Calendar as CalendarIcon,
-  Loader2
+  Loader2,
+  AlertTriangle
 } from 'lucide-vue-next'
 import type { Task } from '@/types'
 import type { TaskImportCommitResult } from '@/services/api'
 import { getTasksPaged } from '@/services/api'
 import { toast } from 'vue-sonner'
+import { formatApiError } from '@/utils/http-error'
+import { reminderIsoToDatetimeLocal, datetimeLocalToIsoOrNull } from '@/utils/task-reminder-form'
 import Button from '@/components/ui/button/Button.vue'
 import Calendar from '@/components/ui/calendar/Calendar.vue'
 import Input from '@/components/ui/input/Input.vue'
@@ -42,6 +46,7 @@ import {
 
 const tasksStore = useTasksStore()
 const versionsStore = useVersionsStore()
+const router = useRouter()
 
 const showModal = ref(false)
 const showDetailModal = ref(false)
@@ -88,6 +93,23 @@ const listPage = ref(1)
 const listPageSize = ref(12)
 const listTotalPages = ref(1)
 const listLoading = ref(false)
+const submitting = ref(false)
+const tagDraft = ref('')
+
+const hasActiveFilters = computed(
+  () =>
+    Boolean(searchQuery.value.trim()) ||
+    Boolean(selectedCategory.value) ||
+    selectedPriority.value !== 'all'
+)
+
+const hasNoVersions = computed(() => versionsStore.versions.length === 0)
+
+onKeyStroke('Escape', e => {
+  if (!showModal.value) return
+  e.preventDefault()
+  closeModal()
+})
 
 async function loadPaged() {
   listLoading.value = true
@@ -117,7 +139,7 @@ async function loadPaged() {
     }
   } catch (error) {
     console.error('Failed to load tasks page:', error)
-    toast.error('加载任务列表失败')
+    toast.error(formatApiError(error))
   } finally {
     listLoading.value = false
   }
@@ -180,6 +202,19 @@ function resetForm() {
   }
   isEditing.value = false
   editingTask.value = null
+  tagDraft.value = ''
+  submitting.value = false
+}
+
+function clearFilters() {
+  searchQuery.value = ''
+  selectedCategory.value = ''
+  selectedPriority.value = 'all'
+  if (listPage.value !== 1) {
+    listPage.value = 1
+  } else {
+    void loadPaged()
+  }
 }
 
 function openModal() {
@@ -228,7 +263,7 @@ function editTask(task: Task) {
     versionId: task.versionId || null,
     priority: task.priority,
     dueDate: task.dueDate || '',
-    reminderTime: task.reminderTime || '',
+    reminderTime: reminderIsoToDatetimeLocal(task.reminderTime),
     tags: [...task.tags],
     notes: task.notes,
     totalPomodoros: task.totalPomodoros
@@ -238,17 +273,24 @@ function editTask(task: Task) {
 }
 
 async function handleSubmit() {
+  if (submitting.value) return
+
+  if (!form.value.title.trim()) {
+    toast.error('请输入任务标题')
+    return
+  }
+
+  if (!isEditing.value && !form.value.versionId) {
+    toast.error('新增任务必须选择关联版本')
+    return
+  }
+
+  const pomRaw = Number(form.value.totalPomodoros)
+  const totalPomodoros = Math.min(99, Math.max(1, Number.isFinite(pomRaw) ? Math.floor(pomRaw) : 1))
+  const reminderTime = datetimeLocalToIsoOrNull(form.value.reminderTime)
+
+  submitting.value = true
   try {
-    if (!form.value.title.trim()) {
-      toast.error('请输入任务标题')
-      return
-    }
-
-    if (!isEditing.value && !form.value.versionId) {
-      toast.error('新增任务必须选择关联版本')
-      return
-    }
-
     if (isEditing.value && editingTask.value) {
       await tasksStore.updateTaskById(editingTask.value.id, {
         title: form.value.title,
@@ -257,40 +299,53 @@ async function handleSubmit() {
         versionId: form.value.versionId,
         priority: form.value.priority,
         dueDate: form.value.dueDate || null,
-        reminderTime: form.value.reminderTime || null,
+        reminderTime,
         tags: form.value.tags,
         notes: form.value.notes,
-        totalPomodoros: form.value.totalPomodoros
+        totalPomodoros
       })
     } else {
       await tasksStore.addTask({
         title: form.value.title,
         description: form.value.description,
         categoryId: form.value.categoryId,
-        versionId: form.value.versionId,
+        versionId: form.value.versionId!,
         priority: form.value.priority,
         dueDate: form.value.dueDate || null,
-        reminderTime: form.value.reminderTime || null,
+        reminderTime,
         tags: form.value.tags,
         notes: form.value.notes,
-        totalPomodoros: form.value.totalPomodoros
+        totalPomodoros
       })
     }
     closeModal()
     toast.success(isEditing.value ? '任务修改成功' : '任务创建成功')
-    void tasksStore.fetchTasks()
-    void loadPaged()
+    void tasksStore.fetchTasks().catch(err => toast.error(formatApiError(err)))
+    await loadPaged()
   } catch (error) {
     console.error('Failed to save task:', error)
-    toast.error('保存任务失败')
+    toast.error(formatApiError(error))
+  } finally {
+    submitting.value = false
   }
 }
 
-function addTag() {
-  const newTag = prompt('输入标签名称：')
-  if (newTag && !form.value.tags.includes(newTag.trim())) {
-    form.value.tags.push(newTag.trim())
+function commitTag() {
+  const t = tagDraft.value.trim()
+  if (!t) {
+    toast.error('请输入标签内容')
+    return
   }
+  if (form.value.tags.includes(t)) {
+    toast.info('该标签已存在')
+    return
+  }
+  if (form.value.tags.length >= 20) {
+    toast.error('标签数量请勿超过 20 个')
+    return
+  }
+  form.value.tags.push(t)
+  tagDraft.value = ''
 }
 
 function removeTag(tag: string) {
@@ -303,7 +358,11 @@ function handleDueDateSelect(value: DateValue | undefined) {
 }
 
 async function handleImportSuccess(result: TaskImportCommitResult) {
-  await tasksStore.fetchTasks()
+  try {
+    await tasksStore.fetchTasks()
+  } catch (error) {
+    toast.error(formatApiError(error))
+  }
   listPage.value = 1
   await loadPaged()
   toast.success(`已导入 ${result.createdTaskCount} 条任务，子任务 ${result.createdSubtaskCount} 条`)
@@ -318,11 +377,17 @@ function goNextPage() {
 }
 
 onMounted(async () => {
-  if (!tasksStore.categories.length) {
+  try {
     await tasksStore.fetchCategories()
+  } catch (error) {
+    toast.error(formatApiError(error))
   }
   if (!versionsStore.versions.length) {
-    await versionsStore.fetchVersions()
+    try {
+      await versionsStore.fetchVersions()
+    } catch (error) {
+      toast.error(formatApiError(error))
+    }
   }
   await loadPaged()
 })
@@ -336,62 +401,62 @@ onMounted(async () => {
         <p class="mt-1 text-muted-foreground">管理你的日常任务和待办事项</p>
       </div>
       <div class="flex items-center gap-2">
-        <Button
-          variant="outline"
-          class="h-10 rounded-lg"
-          @click="openImportModal"
-        >
+        <Button variant="outline" class="h-10 rounded-lg" @click="openImportModal">
           批量导入
         </Button>
-        <Button
-          @click="openModal"
-          class="h-10 rounded-lg"
-        >
+        <Button @click="openModal" class="h-10 rounded-lg">
           <Plus class="w-5 h-5" />
           新建任务
         </Button>
       </div>
     </div>
 
+    <div v-if="hasNoVersions"
+      class="mb-4 flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/95">
+      <AlertTriangle class="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+      <div class="min-w-0 flex-1">
+        <p class="font-medium text-foreground">尚未创建版本</p>
+        <p class="mt-1 text-muted-foreground">新建任务必须关联版本。请先到「版本管理」中创建至少一个版本。</p>
+        <Button type="button" variant="outline" size="sm" class="mt-3 border-amber-500/40 text-foreground hover:bg-amber-500/15"
+          @click="router.push('/versions')">
+          前往版本管理
+        </Button>
+      </div>
+    </div>
+
     <div class="mb-6 rounded-xl border border-border/80 bg-card p-4">
-      <div class="flex flex-col gap-2">
-        <div class="flex items-center gap-4">
-          <div class="flex-1 relative">
+      <div class="flex flex-col gap-3">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+          <div class="relative min-w-0 flex-1">
             <Search class="absolute left-3 top-1/2 w-5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              v-model="searchQuery"
-              type="text"
-              placeholder="搜索标题或描述..."
-              class="h-10 rounded-lg bg-secondary pl-10"
-            />
+            <Input v-model="searchQuery" type="search" placeholder="搜索标题或描述…" autocomplete="off"
+              class="h-10 rounded-lg bg-secondary pl-10" />
           </div>
-          <div class="flex items-center gap-2">
-            <Filter class="w-5 h-5 text-muted-foreground" />
-            <select
-              v-model="selectedCategory"
-              class="h-10 rounded-lg border border-input bg-secondary px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            >
+          <div class="flex flex-wrap items-center gap-2">
+            <Filter class="hidden h-5 w-5 shrink-0 text-muted-foreground sm:block" />
+            <select v-model="selectedCategory"
+              class="h-10 min-w-[8.5rem] flex-1 rounded-lg border border-input bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:flex-none sm:px-4">
               <option v-for="cat in categoryOptions" :key="cat.id" :value="cat.id">
                 {{ cat.name }}
               </option>
             </select>
-            <select
-              v-model="selectedPriority"
-              class="h-10 rounded-lg border border-input bg-secondary px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            >
+            <select v-model="selectedPriority"
+              class="h-10 min-w-[8.5rem] flex-1 rounded-lg border border-input bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:flex-none sm:px-4">
               <option v-for="p in priorityOptions" :key="p.value" :value="p.value">
                 {{ p.label }}
               </option>
             </select>
+            <Button v-if="hasActiveFilters" type="button" variant="ghost" size="sm"
+              class="h-10 shrink-0 text-muted-foreground hover:text-foreground" @click="clearFilters">
+              清空筛选
+            </Button>
           </div>
         </div>
-        <p class="text-xs text-muted-foreground">
-          列表为服务端分页；搜索匹配标题与描述，分类与优先级在服务端筛选。
-        </p>
       </div>
     </div>
 
-    <div v-if="listLoading" class="flex min-h-[280px] flex-col items-center justify-center rounded-xl border border-border/80 bg-card">
+    <div v-if="listLoading"
+      class="flex min-h-[280px] flex-col items-center justify-center rounded-xl border border-border/80 bg-card">
       <Loader2 class="h-10 w-10 animate-spin text-muted-foreground" />
       <p class="mt-3 text-sm text-muted-foreground">加载中...</p>
     </div>
@@ -400,80 +465,78 @@ onMounted(async () => {
       <div class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-secondary">
         <Tag class="w-10 h-10 text-muted-foreground" />
       </div>
-      <h3 class="mb-2 text-xl font-semibold text-foreground">暂无任务</h3>
-      <p class="text-muted-foreground">当前筛选条件下没有任务，或点击右上角创建任务</p>
+      <h3 class="mb-2 text-xl font-semibold text-foreground">
+        {{ hasActiveFilters ? '没有符合条件的任务' : '暂无任务' }}
+      </h3>
+      <p class="text-muted-foreground">
+        {{ hasActiveFilters ? '可尝试调整关键词、分类或优先级，或清空筛选查看全部任务。' : '点击右上角「新建任务」开始记录，或使用批量导入。' }}
+      </p>
+      <div v-if="hasActiveFilters" class="mt-6 flex flex-wrap items-center justify-center gap-3">
+        <Button type="button" variant="outline" @click="clearFilters">清空筛选</Button>
+      </div>
     </div>
 
     <template v-else>
-      <div class="grid grid-cols-3 gap-4">
-        <TaskCard
-          v-for="task in pagedTasks"
-          :key="task.id"
-          :task="task"
-          @edit="editTask"
-          @view="openDetailModal"
-        />
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <TaskCard v-for="task in pagedTasks" :key="task.id" :task="task" @edit="editTask" @view="openDetailModal" />
       </div>
 
       <Pagination class="mt-8 border-t border-border/80 pt-6">
         <PaginationContent class="w-full flex-wrap items-center justify-between gap-3">
-          <PaginationItem class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
+          <PaginationItem
+            class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
             <span>共 {{ listTotal }} 条</span>
             <span class="hidden sm:inline" aria-hidden="true">·</span>
             <span class="tabular-nums">第 {{ listPage }} / {{ listTotalPages }} 页</span>
             <PaginationPageSize v-model="listPageSize" class="sm:ml-0" />
           </PaginationItem>
           <PaginationItem class="flex shrink-0 items-center gap-1">
-            <PaginationPrevious
-              :disabled="listPage <= 1 || listLoading"
-              @click="goPrevPage"
-            />
-            <PaginationNext
-              :disabled="listPage >= listTotalPages || listLoading"
-              @click="goNextPage"
-            />
+            <PaginationPrevious :disabled="listPage <= 1 || listLoading" @click="goPrevPage" />
+            <PaginationNext :disabled="listPage >= listTotalPages || listLoading" @click="goNextPage" />
           </PaginationItem>
         </PaginationContent>
       </Pagination>
     </template>
 
     <Teleport to="body">
-      <div v-if="showModal" class="z-overlay-modal fixed inset-0 flex items-center justify-center bg-black/82 px-4 py-6 backdrop-blur-sm">
-        <div class="w-full max-w-2xl overflow-hidden rounded-xl border border-border/95 bg-card shadow-[0_24px_60px_-28px_rgba(0,0,0,0.75)]">
-          <div class="border-b border-border/80 bg-card/95 px-6 py-4 backdrop-blur">
-            <div class="flex items-center justify-between">
-              <h2 class="text-lg font-semibold text-foreground">{{ isEditing ? '编辑任务' : '新建任务' }}</h2>
-              <button @click="closeModal" class="rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+      <div v-if="showModal"
+        class="z-overlay-modal fixed inset-0 flex items-center justify-center bg-black/82 px-4 py-6 backdrop-blur-sm"
+        @click.self="closeModal">
+        <div
+          class="max-h-[min(92vh,900px)] w-full max-w-2xl overflow-y-auto overflow-x-hidden rounded-xl border border-border/95 bg-card shadow-[0_24px_60px_-28px_rgba(0,0,0,0.75)]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="task-modal-title">
+          <div class="sticky top-0 z-10 border-b border-border/80 bg-card/95 px-6 py-4 backdrop-blur">
+            <div class="flex items-center justify-between gap-3">
+              <h2 id="task-modal-title" class="text-lg font-semibold text-foreground">
+                {{ isEditing ? '编辑任务' : '新建任务' }}
+              </h2>
+              <button type="button" @click="closeModal"
+                class="rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
                 <X class="w-5 h-5" />
               </button>
             </div>
           </div>
           <div class="space-y-4 px-6 py-5">
+            <div v-if="!isEditing && hasNoVersions"
+              class="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground/95">
+              <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" />
+              <span>请先创建版本并刷新本页，或前往「版本管理」添加后再新建任务。</span>
+            </div>
             <div>
               <Label class="mb-1.5 block">任务标题 *</Label>
-              <Input
-                v-model="form.title"
-                type="text"
-                placeholder="输入任务标题"
-                class="h-10 bg-secondary"
-              />
+              <Input v-model="form.title" type="text" placeholder="输入任务标题" class="h-10 bg-secondary" />
             </div>
             <div>
               <Label class="mb-1.5 block">任务描述</Label>
-              <Textarea
-                v-model="form.description"
-                rows="3"
-                placeholder="输入任务描述"
-                class="bg-secondary resize-none"
-              />
+              <Textarea v-model="form.description" rows="3" placeholder="输入任务描述" class="bg-secondary resize-none" />
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <Label class="mb-1.5 block">分类</Label>
-                <select
-                  v-model="form.categoryId"
-                  class="h-10 w-full rounded-md border border-input bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                >
+                <select v-model="form.categoryId"
+                  class="h-10 w-full rounded-md border border-input bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
                   <option :value="null">未分类</option>
                   <option v-for="cat in tasksStore.categories" :key="cat.id" :value="cat.id">
                     {{ cat.name }}
@@ -482,10 +545,8 @@ onMounted(async () => {
               </div>
               <div>
                 <Label class="mb-1.5 block">关联版本 <span class="text-red-400">*</span></Label>
-                <select
-                  v-model="form.versionId"
-                  class="h-10 w-full rounded-md border border-input bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                >
+                <select v-model="form.versionId"
+                  class="h-10 w-full rounded-md border border-input bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
                   <option :value="null">请选择版本</option>
                   <option v-for="version in versionOptions" :key="version.id" :value="version.id">
                     {{ version.name }}
@@ -496,30 +557,29 @@ onMounted(async () => {
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <Label class="mb-1.5 block">优先级</Label>
-                <select
-                  v-model="form.priority"
-                  class="h-10 w-full rounded-md border border-input bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                >
+                <select v-model="form.priority"
+                  class="h-10 w-full rounded-md border border-input bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
                   <option value="high">高优先级</option>
                   <option value="medium">中优先级</option>
                   <option value="low">低优先级</option>
                 </select>
               </div>
-              <div />
+              <div>
+                <Label class="mb-1.5 block">预估番茄钟</Label>
+                <Input v-model.number="form.totalPomodoros" type="number" min="1" max="99" step="1"
+                  class="h-10 bg-secondary tabular-nums" />
+              </div>
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <Label class="mb-1.5 block">
-                  <Clock class="w-4 h-4 inline mr-1" />
+                  <Clock class="mr-1 inline h-4 w-4" />
                   截止日期
                 </Label>
                 <Popover v-model:open="dueDateOpen">
                   <PopoverTrigger as-child>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      class="h-10 w-full justify-between bg-secondary font-normal text-foreground"
-                    >
+                    <Button type="button" variant="outline"
+                      class="h-10 w-full justify-between bg-secondary font-normal text-foreground">
                       <span :class="dueDateValue ? 'text-foreground' : 'text-muted-foreground'">
                         {{ dueDateLabel }}
                       </span>
@@ -527,88 +587,61 @@ onMounted(async () => {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent class="w-auto overflow-hidden p-0" align="start">
-                    <Calendar
-                      :model-value="dueDateValue"
-                      layout="month-and-year"
-                      @update:model-value="handleDueDateSelect"
-                    />
+                    <Calendar :model-value="dueDateValue" layout="month-and-year"
+                      @update:model-value="handleDueDateSelect" />
                   </PopoverContent>
                 </Popover>
               </div>
               <div>
                 <Label class="mb-1.5 block">
-                  <AlertCircle class="w-4 h-4 inline mr-1" />
+                  <AlertCircle class="mr-1 inline h-4 w-4" />
                   提醒时间
                 </Label>
-                <Input
-                  v-model="form.reminderTime"
-                  type="time"
-                  class="h-10 bg-secondary"
-                />
+                <Input v-model="form.reminderTime" type="datetime-local" class="h-10 bg-secondary" />
+                <p class="mt-1 text-xs text-muted-foreground">留空表示不设提醒；与浏览器通知配合时需保持应用打开。</p>
               </div>
             </div>
             <div>
               <Label class="mb-2 block">标签</Label>
-              <div class="flex flex-wrap gap-2">
-                <span
-                  v-for="tag in form.tags"
-                  :key="tag"
-                  class="flex items-center gap-1 rounded-md border border-blue-400/30 bg-blue-500/15 px-2.5 py-1 text-xs text-blue-200"
-                >
+              <div class="mb-2 flex flex-wrap gap-2">
+                <span v-for="tag in form.tags" :key="tag"
+                  class="flex items-center gap-1 rounded-md border border-blue-400/30 bg-blue-500/15 px-2.5 py-1 text-xs text-blue-200">
                   {{ tag }}
-                  <button @click="removeTag(tag)" class="rounded p-0.5 text-blue-300 hover:bg-blue-400/20 hover:text-blue-100">
-                    <X class="w-3 h-3" />
+                  <button type="button" @click="removeTag(tag)"
+                    class="rounded p-0.5 text-blue-300 hover:bg-blue-400/20 hover:text-blue-100">
+                    <X class="h-3 w-3" />
                   </button>
                 </span>
-                <Button
-                  @click="addTag"
-                  variant="outline"
-                  class="rounded-md border border-dashed border-border px-3 py-1 text-sm text-muted-foreground transition-colors hover:border-ring hover:bg-secondary hover:text-foreground"
-                >
-                  + 添加标签
+              </div>
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Input v-model="tagDraft" type="text" placeholder="输入标签后添加" maxlength="32"
+                  class="h-10 flex-1 bg-secondary" @keydown.enter.prevent="commitTag" />
+                <Button type="button" variant="outline" class="h-10 shrink-0 sm:w-auto" @click="commitTag">
+                  添加标签
                 </Button>
               </div>
             </div>
             <div>
               <Label class="mb-1.5 block">备注</Label>
-              <Textarea
-                v-model="form.notes"
-                rows="3"
-                placeholder="输入备注信息"
-                class="bg-secondary resize-none"
-              />
+              <Textarea v-model="form.notes" rows="3" placeholder="输入备注信息" class="bg-secondary resize-none" />
             </div>
           </div>
-          <div class="flex items-center justify-end gap-3 border-t border-border/80 bg-card/95 px-6 py-4 backdrop-blur">
-            <Button
-              @click="closeModal"
-              variant="outline"
-            >
+          <div class="sticky bottom-0 flex items-center justify-end gap-3 border-t border-border/80 bg-card/95 px-6 py-4 backdrop-blur">
+            <Button type="button" variant="outline" :disabled="submitting" @click="closeModal">
               取消
             </Button>
-            <Button
-              @click="handleSubmit"
-            >
-              {{ isEditing ? '保存修改' : '创建任务' }}
+            <Button type="button" :disabled="submitting || (!isEditing && hasNoVersions)" @click="handleSubmit">
+              <Loader2 v-if="submitting" class="mr-2 h-4 w-4 animate-spin" />
+              {{ submitting ? '提交中…' : isEditing ? '保存修改' : '创建任务' }}
             </Button>
           </div>
         </div>
       </div>
     </Teleport>
 
-    <TaskDetailModal
-      v-if="viewingTask"
-      :task="viewingTask"
-      :show="showDetailModal"
-      @close="closeDetailModal"
-      @edit="editTask"
-      @task-updated="onViewingTaskUpdated"
-    />
+    <TaskDetailModal v-if="viewingTask" :task="viewingTask" :show="showDetailModal" @close="closeDetailModal"
+      @edit="editTask" @task-updated="onViewingTaskUpdated" />
 
-    <TaskImportModal
-      :show="showImportModal"
-      @close="closeImportModal"
-      @imported="handleImportSuccess"
-    />
+    <TaskImportModal :show="showImportModal" @close="closeImportModal" @imported="handleImportSuccess" />
   </div>
 </template>

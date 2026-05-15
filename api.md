@@ -117,11 +117,16 @@
 - `soundEnabled`: 是否开启声音提醒。
 - `darkMode`: 是否开启深色模式。
 
-### 前端统计 `DailyStats`（当前为前端 store 示例数据）
+### 前端 `DailyStats`（番茄按日汇总）
 
-- `date`: 统计维度日期（如“周一”“第1周”）。
-- `pomodoros`: 番茄钟数量。
-- `minutes`: 专注分钟数。
+- 前端 Pinia 模块 `useStatsStore`（[frontend/src/stores/stats.ts](frontend/src/stores/stats.ts)）按**本地日历日**将「完成的工作番茄」写入 `localStorage`（键 `pomodoro_daily_log_v1`），与计时器中当前「工作时长（分钟）」一致。
+- `今日完成`、按周标签（周一至周日）及近四周汇总均由上述日志推导，**不再使用写死的示例数字**；未在本机完成过番茄时各值为 0。
+
+### 统计分析页 `Stats.vue`（[frontend/src/views/Stats.vue](frontend/src/views/Stats.vue)）
+
+- **周对齐**：「本周新增」柱状图按**本地日**与**周一至周日**为一周（与 `useStatsStore` 周维一致），任务数按 `createdAt` 落在该日的任务计数（见 [frontend/src/utils/calendar-week.ts](frontend/src/utils/calendar-week.ts)）。
+- **趋势联动**：柱状图可选叠加「完成番茄(本机)」系列，数据来自 `useStatsStore.weeklyStats`（与首页计时器写入同源）。
+- **分布维度**：环形图与下方表格支持 **按分类** / **按版本**（`versionName` 为空时归入「未关联版本」）。
 
 ## 8) 时间与格式约定
 

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useTasksStore } from '@/stores/tasks'
 import { useRouter } from 'vue-router'
 import { User, Bell, Palette, Shield, LogOut, Plus, X, Save } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { formatApiError } from '@/utils/http-error'
 import Button from '@/components/ui/button/Button.vue'
 import Input from '@/components/ui/input/Input.vue'
 import Label from '@/components/ui/label/Label.vue'
@@ -42,9 +43,18 @@ async function addCategory() {
     toast.success('分类添加成功')
   } catch (error) {
     console.error('Failed to add category:', error)
-    toast.error('添加失败，请重试')
+    toast.error(formatApiError(error))
   }
 }
+
+onMounted(async () => {
+  try {
+    await tasksStore.fetchCategories()
+  } catch (error) {
+    toast.error(formatApiError(error))
+  }
+})
+
 </script>
 
 <template>
@@ -115,7 +125,7 @@ async function addCategory() {
             </Button>
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
+          <div v-if="tasksStore.categories.length > 0" class="grid grid-cols-2 gap-4">
             <div 
               v-for="category in tasksStore.categories" 
               :key="category.id"
@@ -128,6 +138,9 @@ async function addCategory() {
               <span class="flex-1 text-foreground/90">{{ category.name }}</span>
             </div>
           </div>
+          <div v-else class="rounded-lg border border-dashed border-border/80 bg-secondary/30 px-4 py-8 text-center">
+            <p class="text-sm text-muted-foreground">暂无自定义分类。点击「添加分类」后可在任务中使用。</p>
+          </div>
         </div>
 
         <div class="rounded-xl border border-border/80 bg-card p-6">
@@ -137,6 +150,9 @@ async function addCategory() {
             </div>
             <h2 class="text-lg font-semibold text-foreground">提醒设置</h2>
           </div>
+          <p class="mb-4 text-xs text-muted-foreground/90">
+            以下开关为界面预留；与任务「提醒时间」相关的浏览器通知请在「提醒中心」开启权限。
+          </p>
 
           <div class="space-y-4">
             <div class="flex items-center justify-between">
@@ -188,7 +204,7 @@ async function addCategory() {
           <div class="space-y-2 text-sm text-muted-foreground">
             <p>版本: 1.0.0</p>
             <p>技术栈: Vue 3 + Node.js</p>
-            <p>数据库: SQLite</p>
+            <p>数据库: PostgreSQL</p>
           </div>
         </div>
       </div>

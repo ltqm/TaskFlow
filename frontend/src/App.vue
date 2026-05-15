@@ -4,19 +4,28 @@ import { useAuthStore } from '@/stores/auth'
 import { useTasksStore } from '@/stores/tasks'
 import Navigation from '@/components/Navigation.vue'
 import { Toaster } from 'vue-sonner'
+import { toast } from 'vue-sonner'
 import ConfirmDialogHost from '@/components/ui/confirm-dialog/ConfirmDialogHost.vue'
+import { useReminderBrowserNotifications } from '@/composables/useReminderBrowserNotifications'
+import { formatApiError } from '@/utils/http-error'
 
 const authStore = useAuthStore()
 const tasksStore = useTasksStore()
 const isLoading = ref(true)
+
+useReminderBrowserNotifications()
 
 onMounted(async () => {
   if (authStore.token && !authStore.user) {
     await authStore.loadUser()
   }
   if (authStore.isAuthenticated) {
-    await tasksStore.fetchTasks()
-    await tasksStore.fetchCategories()
+    try {
+      await tasksStore.fetchTasks()
+      await tasksStore.fetchCategories()
+    } catch (error) {
+      toast.error(formatApiError(error))
+    }
   }
   isLoading.value = false
 })

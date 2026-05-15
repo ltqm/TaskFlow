@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { User } from '@/types'
 import { register, login, getUser } from '@/services/api'
+import { toast } from 'vue-sonner'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
@@ -46,6 +47,7 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = await getUser()
       } catch (error) {
         console.error('Failed to load user:', error)
+        toast.error('登录状态已失效或网络异常，请重新登录')
         logout()
       }
     } else if (localStorage.getItem('user')) {

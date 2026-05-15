@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRemindersStore } from '@/stores/reminders'
 import { useTasksStore } from '@/stores/tasks'
 import { 
@@ -14,6 +14,9 @@ import {
 } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
 import Badge from '@/components/ui/badge/Badge.vue'
+import { resolveTaskCategoryLabel } from '@/utils/task-display'
+import type { Task } from '@/types'
+import { toast } from 'vue-sonner'
 
 const remindersStore = useRemindersStore()
 const tasksStore = useTasksStore()
@@ -32,9 +35,42 @@ const priorityLabels = {
   low: '低'
 }
 
-const hasDismissedReminders = computed(() => {
-  return remindersStore.allReminders.length > remindersStore.unreadCount
+const hasNotificationApi = typeof globalThis !== 'undefined' && 'Notification' in globalThis
+
+const notifyPermission = ref<NotificationPermission>(
+  hasNotificationApi ? globalThis.Notification.permission : 'denied'
+)
+
+onMounted(() => {
+  if (hasNotificationApi) {
+    notifyPermission.value = globalThis.Notification.permission
+  }
 })
+
+async function requestBrowserNotifications() {
+  if (!hasNotificationApi) {
+    toast.error('当前环境不支持系统通知')
+    return
+  }
+  const r = await globalThis.Notification.requestPermission()
+  notifyPermission.value = r
+  if (r === 'granted') toast.success('已开启浏览器通知，请在应用保持打开时在提醒时间附近留意弹窗')
+  else if (r === 'denied') toast.error('通知权限被拒绝，可在浏览器站点设置中重新开启')
+  else toast.message('未授予通知权限')
+}
+
+const notifyStatusText = computed(() => {
+  switch (notifyPermission.value) {
+    case 'granted':
+      return '已授权：到点后将尝试弹出系统通知（需本页或应用保持打开，且提醒时间后 10 分钟内）'
+    case 'denied':
+      return '未授权或已拒绝：无法弹出系统通知'
+    default:
+      return '尚未请求权限：点击下方按钮授权后可接收任务提醒时间的系统通知'
+  }
+})
+
+const hasDismissedReminders = computed(() => remindersStore.hasDismissed)
 
 function getTimeRemaining(dueDate: string): string {
   const now = new Date()
@@ -69,10 +105,8 @@ function formatDueDate(dueDate: string): string {
   })
 }
 
-function getCategoryName(categoryId: string | null): string {
-  if (!categoryId) return '未分类'
-  const category = tasksStore.categories.find(c => c.id === categoryId)
-  return category?.name || '未分类'
+function categoryLabel(task: Task) {
+  return resolveTaskCategoryLabel(task, tasksStore.categories)
 }
 </script>
 
@@ -108,6 +142,20 @@ function getCategoryName(categoryId: string | null): string {
           恢复提醒
         </Button>
       </div>
+    </div>
+
+    <div class="mb-6 rounded-xl border border-border/80 bg-card p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div class="text-sm text-muted-foreground max-w-2xl">
+        <span class="font-medium text-foreground/90">浏览器通知</span>
+        · {{ notifyStatusText }}
+      </div>
+      <Button
+        v-if="hasNotificationApi && notifyPermission !== 'granted'"
+        class="shrink-0"
+        @click="requestBrowserNotifications"
+      >
+        请求通知权限
+      </Button>
     </div>
 
     <div class="mb-6 rounded-xl border border-border/80 bg-card p-4">
@@ -185,7 +233,7 @@ function getCategoryName(categoryId: string | null): string {
               <div class="mb-3 flex items-center gap-4 text-sm text-muted-foreground">
                 <span class="flex items-center gap-1">
                   <Tag class="w-4 h-4" />
-                  {{ getCategoryName(task.categoryId) }}
+                  {{ categoryLabel(task) }}
                 </span>
                 <span class="flex items-center gap-1">
                   <Clock class="w-4 h-4 text-red-400" />
@@ -263,7 +311,7 @@ function getCategoryName(categoryId: string | null): string {
               <div class="mb-3 flex items-center gap-4 text-sm text-muted-foreground">
                 <span class="flex items-center gap-1">
                   <Tag class="w-4 h-4" />
-                  {{ getCategoryName(task.categoryId) }}
+                  {{ categoryLabel(task) }}
                 </span>
                 <span class="flex items-center gap-1">
                   <Clock class="w-4 h-4 text-blue-400" />

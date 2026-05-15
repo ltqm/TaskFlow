@@ -34,6 +34,7 @@ export const useTasksStore = defineStore('tasks', () => {
       tasks.value = await getTasks()
     } catch (error) {
       console.error('Failed to fetch tasks:', error)
+      throw error
     } finally {
       loading.value = false
     }
@@ -44,6 +45,7 @@ export const useTasksStore = defineStore('tasks', () => {
       categories.value = await getCategories()
     } catch (error) {
       console.error('Failed to fetch categories:', error)
+      throw error
     }
   }
 

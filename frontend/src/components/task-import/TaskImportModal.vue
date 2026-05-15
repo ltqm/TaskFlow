@@ -5,6 +5,7 @@ import { toast } from 'vue-sonner'
 import Button from '@/components/ui/button/Button.vue'
 import type { TaskImportCommitResult, TaskImportPrecheckResult } from '@/services/api'
 import { commitTaskImport, precheckTaskImport } from '@/services/api'
+import { formatApiError } from '@/utils/http-error'
 
 const props = defineProps<{
   show: boolean
@@ -63,8 +64,7 @@ async function runPrecheck() {
       toast.error('预检未通过，请先修复错误行')
     }
   } catch (error) {
-    const message = (error as { message?: string })?.message || '预检失败'
-    toast.error(message)
+    toast.error(formatApiError(error))
   } finally {
     isPrechecking.value = false
   }
@@ -84,8 +84,7 @@ async function confirmImport() {
     emit('imported', commitResult)
     emit('close')
   } catch (error) {
-    const message = (error as { message?: string })?.message || '导入失败'
-    toast.error(message)
+    toast.error(formatApiError(error))
   } finally {
     isCommitting.value = false
   }
@@ -127,12 +126,12 @@ async function confirmImport() {
             </div>
           </div>
 
-          <div class="rounded-lg border border-border/80 bg-card p-4">
+          <div class="w-fit rounded-lg border border-border/80 bg-card p-4">
             <label class="mb-2 block text-sm font-medium text-foreground">选择导入文件</label>
             <input
               type="file"
               accept=".xlsx,.xls"
-              class="block w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-primary-foreground hover:file:bg-primary/90"
+              class="block w-auto max-w-full text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-primary-foreground hover:file:bg-primary/90"
               @change="onSelectFile"
             >
             <p v-if="selectedFile" class="mt-2 text-xs text-muted-foreground">

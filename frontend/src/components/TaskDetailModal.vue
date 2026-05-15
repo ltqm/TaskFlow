@@ -2,6 +2,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import type { Task, SubTask } from '@/types'
 import { resolveTaskWorkflowStatus } from '@/utils/task-workflow'
+import { resolveTaskCategoryLabel } from '@/utils/task-display'
 import { useTasksStore } from '@/stores/tasks'
 import { useVersionsStore } from '@/stores/versions'
 import {
@@ -79,6 +80,22 @@ const workflowBadgeClass = computed(() => {
       return 'bg-secondary text-foreground/85 ring-1 ring-border'
   }
 })
+const categoryLabel = computed(() =>
+  resolveTaskCategoryLabel(props.task, tasksStore.categories)
+)
+
+function formatReminderTime(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 const workflowLabel = computed(() => {
   switch (workflowState.value) {
     case 'completed':
@@ -115,6 +132,7 @@ async function loadSubTasks() {
   } catch (error) {
     console.error('Failed to load sub tasks:', error)
     subTasks.value = []
+    toast.error('子任务加载失败')
   }
 }
 
@@ -240,9 +258,9 @@ async function deleteSubTask(subTask: SubTask) {
           </div>
 
           <div class="grid grid-cols-2 gap-4">
-            <div v-if="task.category" class="flex items-center gap-2 text-muted-foreground">
+            <div v-if="categoryLabel !== '未分类'" class="flex items-center gap-2 text-muted-foreground">
               <Tag class="w-5 h-5 text-blue-400" />
-              <span>{{ task.category }}</span>
+              <span>{{ categoryLabel }}</span>
             </div>
             <div v-if="task.versionName" class="flex items-center gap-2 text-muted-foreground">
               <GitBranch class="w-5 h-5 text-purple-400" />
@@ -254,7 +272,7 @@ async function deleteSubTask(subTask: SubTask) {
             </div>
             <div v-if="task.reminderTime" class="flex items-center gap-2 text-muted-foreground">
               <AlertCircle class="w-5 h-5 text-yellow-400" />
-              <span>{{ task.reminderTime }}</span>
+              <span>{{ formatReminderTime(task.reminderTime) }}</span>
             </div>
           </div>
 
