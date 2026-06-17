@@ -42,7 +42,7 @@ cd frontend && npm run dev   # 前端开发
 cd frontend && npm run build # 前端构建（vue-tsc + vite）
 ```
 
-根目录另有轻量脚本（无需在根安装依赖）：`npm run smoke`（需后端已启动，见 [README.md](README.md)）。
+根目录另有聚合脚本（无需在根安装依赖）：`npm run build:all`（见 [README.md](README.md)）。
 
 细节、目录结构与禁区见子目录 `AGENTS.md`。
 

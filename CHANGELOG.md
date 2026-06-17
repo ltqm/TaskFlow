@@ -4,5 +4,5 @@
 
 ## [未发布]
 
-- 工程化：根目录 `package.json` 聚合脚本、`scripts/smoke.mjs` 本地健康检查、CI 双端构建。
+- 工程化：根目录 `package.json` 聚合构建脚本（`build:backend` / `build:frontend` / `build:all`）。
 - 文档：`README.md` 部署与环境变量说明；`api.md` 与前后端契约对齐。
