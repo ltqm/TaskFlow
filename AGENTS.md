@@ -6,8 +6,11 @@
 
 全栈任务/番茄钟类演示应用：
 
-- **后端**：Node.js + TypeScript + Express + Prisma（PostgreSQL）+ JWT。
-- **前端**：Vue 3 + Vite + TypeScript + Pinia + Vue Router + Tailwind + Reka UI / shadcn-vue 风格组件。
+- **后端**：Node.js + TypeScript + Express + Prisma（PostgreSQL）+ JWT → [github.com/ltqm/backend](https://github.com/ltqm/backend)
+- **前端**：Vue 3 + Vite + TypeScript + Pinia + Vue Router + Tailwind + Reka UI / shadcn-vue 风格组件 → [github.com/ltqm/frontend](https://github.com/ltqm/frontend)
+- **本仓库（TaskFlow）**：Docker Compose 编排、接口契约 [api.md](api.md)、部署文档；`backend/`、`frontend/` 为 **Git Submodule**。
+
+克隆本仓库时请使用 `git clone --recurse-submodules`，或克隆后执行 `git submodule update --init --recursive`。
 
 ## 必读范围（工作边界）
 
