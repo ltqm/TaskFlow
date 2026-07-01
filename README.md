@@ -2,46 +2,6 @@
 
 个人任务、版本、分类、提醒、统计与批量导入（Excel）。技术栈与协作边界见根目录 [AGENTS.md](AGENTS.md)。
 
-## 仓库结构
-
-本项目采用**多仓库**组织：
-
-| 仓库 | 地址 | 说明 |
-|------|------|------|
-| **TaskFlow**（本仓库） | https://github.com/ltqm/TaskFlow | Docker 编排、`api.md`、部署文档 |
-| **backend** | https://github.com/ltqm/backend | Express + Prisma 后端 |
-| **frontend** | https://github.com/ltqm/frontend | Vue 3 前端 |
-
-本仓库通过 **Git Submodule** 引用 `backend/` 与 `frontend/`。
-
-### 克隆（含子模块）
-
-```bash
-git clone --recurse-submodules https://github.com/ltqm/TaskFlow.git
-cd TaskFlow
-```
-
-若已克隆但未拉取子模块：
-
-```bash
-git submodule update --init --recursive
-```
-
-### 更新代码
-
-```bash
-# 本仓库（编排与文档）
-git pull
-
-# 同步子模块到主仓库记录的版本
-git submodule update --init --recursive
-
-# 或拉取子模块最新 master（Docker 部署时常用）
-git submodule update --remote --merge
-```
-
-仅开发某一端时，也可单独克隆对应仓库，无需拉取 TaskFlow。
-
 ## 环境要求
 
 - **Node.js** ≥ 18。

@@ -190,13 +190,10 @@ docker compose up -d --build frontend
 ```powershell
 cd E:\AI\demo
 git pull
-git submodule update --remote --merge
 
 docker compose up -d --build
 ```
 
-- 后端、前端代码分别在 [ltqm/backend](https://github.com/ltqm/backend) 与 [ltqm/frontend](https://github.com/ltqm/frontend) 维护；本仓库通过 submodule 引用。
-- 若只改了后端或前端，可在对应子仓库 `git push` 后，于本仓库执行 `git submodule update --remote` 再重建镜像。
 - 后端镜像重建时会自动执行 **`prisma migrate deploy`**。
 - 前端若 API 地址仍是 `/api`（同源），一般**无需**改构建参数。
 
@@ -311,17 +308,11 @@ cd frontend && npm run dev
 在已安装 Docker 的 Linux VPS 上步骤相同：
 
 ```bash
-git clone --recurse-submodules https://github.com/ltqm/TaskFlow.git
+git clone https://github.com/ltqm/TaskFlow.git
 cd TaskFlow
 cp .env.docker.example .env
 # 编辑 .env
 docker compose up -d --build
-```
-
-若已 `git clone` 但未带子模块：
-
-```bash
-git submodule update --init --recursive
 ```
 
 生产环境建议：
